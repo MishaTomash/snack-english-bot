@@ -1,10 +1,12 @@
 import { Bot } from 'grammy';
 import { config } from '../config';
-
+import { handleStart } from './handlers/start';
+import { handleLevelSelection } from './handlers/level';
 
 export const bot = new Bot(config.BOT_TOKEN);
 
+// Реєструємо команду /start
+bot.command('start', handleStart);
 
-bot.command('start', async (ctx) => {
-  await ctx.reply('🍪 Привіт! Я SnackEnglish. Бот успішно запущено і я готовий до роботи!');
-});
+// Реєструємо обробник кнопок рівня (спрацює на всі callback data, що починаються з "level_")
+bot.callbackQuery(/^level_/, handleLevelSelection);
