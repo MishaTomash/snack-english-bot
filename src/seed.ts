@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Word } from './models/Word';
 import { config } from './config/index';
 import { Text } from './models/Text';
+import { TestQuestion } from './models/TestQuestion';
 
 const seedData = async () => {
   try {
@@ -37,6 +38,17 @@ const seedData = async () => {
         level: 'A2'
       }
     ]);
+
+    await TestQuestion.deleteMany({});
+    await TestQuestion.insertMany([
+      {
+        level: 'A2',
+        question: 'Як буде “вода”?',
+        options: ['school', 'water', 'window', 'bread'],
+        correctOptionIndex: 1
+      }
+    ]);
+    console.log('✅ Тести успішно додано!');
 
     console.log('✅ Слова успішно додано!');
     process.exit(0);
