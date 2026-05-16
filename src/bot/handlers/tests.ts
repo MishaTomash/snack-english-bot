@@ -28,11 +28,11 @@ export const sendRandomTest = async (ctx: Context) => {
             });
         } catch (error: any) {
             if (error.description?.includes('message is not modified')) {
-                await ctx.answerCallbackQuery({ text: '🎲 Випало те саме питання!', show_alert: false }).catch(() => {});
+                await ctx.answerCallbackQuery({ text: '🎲 Випало те саме питання!', show_alert: false }).catch(() => { });
                 return;
             }
         }
-        await ctx.answerCallbackQuery().catch(() => {});
+        await ctx.answerCallbackQuery().catch(() => { });
     } else {
         await ctx.reply(message, {
             reply_markup: createTestKeyboard(testData._id.toString(), testData.options, testData.correctOptionIndex),
@@ -51,6 +51,12 @@ export const handleTestAnswer = async (ctx: Context) => {
 
     if (isCorrect) {
         await ctx.answerCallbackQuery({ text: '✅ Правильно! Молодець!', show_alert: true });
+
+        const user = await User.findOne({ telegramId: ctx.from?.id });
+        if (user) {
+            user.testsPassed = (user.testsPassed || 0) + 1;
+            await user.save();
+        }
     } else {
         await ctx.answerCallbackQuery({ text: '❌ Неправильно. Спробуй ще раз!', show_alert: true });
     }

@@ -28,7 +28,7 @@ export const handleWords = async (ctx: CommandContext<Context>) => {
     });
 
     // Оновлюємо статистику користувача (кількість вивчених слів)
-    user.wordsLearned += words.length;
+    user.wordsLearned = (user.wordsLearned || 0) + words.length;
     await user.save();
 
     await ctx.reply(message, { parse_mode: 'Markdown' });
