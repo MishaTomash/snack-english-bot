@@ -9,6 +9,7 @@ export interface IUser extends Document {
     testsPassed?: number;
     // Нові поля для системи Freemium 💎
     isPremium: boolean;
+    premiumExpiresAt?: Date; 
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
 }
@@ -19,9 +20,9 @@ const UserSchema: Schema = new Schema({
     streak: { type: Number, default: 0 },
     lastActive: { type: Date },
     wordsLearned: { type: Number, default: 0 },
-    testsPassed: { type: Number, default: 0 },
     // Налаштування Freemium 💎
     isPremium: { type: Boolean, default: false },
+    premiumExpiresAt: { type: Date }, 
     wordsLearnedToday: { type: Number, default: 0 },
     lastWordLearnDate: { type: Date }
 });

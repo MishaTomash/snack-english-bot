@@ -15,20 +15,42 @@ export const showProfile = async (ctx: Context) => {
     const testsPassed = user.testsPassed || 0;
     const wordsToday = user.wordsLearnedToday || 0;
     
-    // Визначаємо статус для красивого відображення
-    const accountStatus = user.isPremium ? '💎 Premium' : '🆓 Базовий';
+    let accountStatus = '🆓 Базовий';
+    let premiumInfo = '';
 
-    const message = `👤 *Твій профіль SnackEnglish*\n\n` +
-        `🎓 Рівень: ${user.level || 'Не обрано'}\n` +
-        `⭐️ Статус: ${accountStatus}\n\n` +
-        `📊 *Статистика:*\n` +
-        `🔥 Дні поспіль: ${streak}\n` +
-        `📚 Вивчено слів всього: ${wordsLearned}\n` +
-        `📖 Слів вивчено сьогодні: ${wordsToday}\n` +
-        `✅ Пройдено тестів: ${testsPassed}\n\n` +
-        (user.isPremium 
-            ? `Дякуємо за підтримку! Насолоджуйся безлімітним навчанням 🚀` 
-            : `💡 Отримай безліміт слів та озвучку з Premium! Натисни кнопку в меню.`);
+    if (user.isPremium) {
+        if (user.premiumExpiresAt && new Date() > user.premiumExpiresAt) {
+            user.isPremium = false;
+            user.premiumExpiresAt = undefined;
+            await user.save();
+            accountStatus = '🆓 Базовий';
+        } else {
+            accountStatus = '💎 Premium';
+            
+            if (user.premiumExpiresAt) {
+                const formattedDate = user.premiumExpiresAt.toLocaleDateString('uk-UA', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+                premiumInfo = `\n📅 *Діє до:* ${formattedDate}`;
+            }
+        }
+    }
+
+    // Чистий шаблонний рядок без жодних конкатенацій та \n
+    const message = `👤 *Твій профіль SnackEnglish*
+
+🎓 *Рівень:* ${user.level || 'Не обрано'}
+⭐️ *Статус:* ${accountStatus}${premiumInfo}
+
+📊 *Статистика:*
+🔥 Дні поспіль: ${streak}
+📚 Вивчено слів всього: ${wordsLearned}
+📖 Слів вивчено сьогодні: ${wordsToday}
+✅ Пройдено тестів: ${testsPassed}
+
+${user.isPremium ? 'Дякуємо за підтримку! Насолоджуйся безлімітним навчанням 🚀' : '💡 Отримай Premium, щоб прибрати ліміти та відкрити озвучку!'}`;
 
     await ctx.reply(message, { parse_mode: 'Markdown' });
 };
