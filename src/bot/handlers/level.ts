@@ -1,23 +1,33 @@
 import { Context } from 'grammy';
 import { User } from '../../models/User';
+import { mainMenuKeyboard } from '../keyboards/main';
 
 export const handleLevelSelection = async (ctx: Context) => {
-  const callbackData = ctx.callbackQuery?.data;
-  const telegramId = ctx.from?.id;
+    const callbackData = ctx.callbackQuery?.data;
+    if (!callbackData) return;
+    
+    const telegramId = ctx.from?.id;
 
-  if (!callbackData || !telegramId) return;
+    if (!telegramId) return;
 
-  // Отримуємо сам рівень (наприклад, 'A1' з 'level_A1')
-  const level = callbackData.split('_')[1]; 
+    const level = callbackData.split('_')[1];
 
-  try {
-    await User.findOneAndUpdate({ telegramId }, { level });
 
-    // Оновлюємо текст повідомлення, видаляючи кнопки
-    await ctx.editMessageText(`✅ Супер! Твій рівень встановлено: **${level}**.\n\nТепер я буду підбирати матеріали спеціально для тебе!`);
-    await ctx.answerCallbackQuery(); // Обов'язкова відповідь Telegram, щоб кнопка перестала "вантажитись"
-  } catch (error) {
-    console.error('Помилка при оновленні рівня:', error);
-    await ctx.answerCallbackQuery('Сталася помилка при збереженні рівня.');
-  }
+    await User.findOneAndUpdate(
+        { telegramId },
+        { level },
+        { new: true }
+    );
+
+    // Прибираємо інлайн-кнопки з попереднього повідомлення
+    await ctx.editMessageText(`✅ Супер! Твій рівень встановлено: **${level}**.\n\nТепер я буду підбирати матеріали спеціально для тебе!`, {
+        parse_mode: 'Markdown'
+    });
+    
+    // Надсилаємо нове повідомлення з головним меню
+    await ctx.reply('Обери, з чого почнемо сьогодні? 👇', {
+        reply_markup: mainMenuKeyboard
+    });
+
+    await ctx.answerCallbackQuery();
 };

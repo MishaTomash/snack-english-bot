@@ -2,7 +2,7 @@ import { CommandContext, Context } from 'grammy';
 import { User } from '../../models/User';
 import { getRandomWords } from '../../services/wordService';
 
-export const handleWords = async (ctx: CommandContext<Context>) => {
+export const handleWords = async (ctx: Context) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
