@@ -29,6 +29,7 @@ bot.callbackQuery('next_text', sendRandomText);
 bot.callbackQuery(/^test_/, handleTestAnswer);
 bot.callbackQuery('next_test', sendRandomTest);
 bot.callbackQuery('buy_premium', handlePremiumPurchase);
+bot.callbackQuery('next_word', checkWordLimits, (ctx: any) => handleWords(ctx));
 
 // Реєструємо обробник кнопок головного меню
 // Обгортаємо функції та додаємо checkWordLimits для кнопки "Нові слова"
