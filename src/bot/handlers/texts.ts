@@ -10,38 +10,40 @@ export const sendRandomText = async (ctx: Context) => {
 
     const user = await User.findOne({ telegramId });
     if (!user || !user.level) {
+        if (ctx.callbackQuery) await ctx.answerCallbackQuery();
         return ctx.reply('Будь ласка, спочатку обери свій рівень: /start');
     }
 
     const textData = await getRandomText(user.level);
     if (!textData) {
+        if (ctx.callbackQuery) await ctx.answerCallbackQuery();
         return ctx.reply('На жаль, для твого рівня поки немає текстів 😔');
     }
 
     const message = `🇬🇧 **Read and translate:**\n\n_${textData.englishText}_`;
+    const keyboard = createTextKeyboard(textData._id.toString());
 
-    // Якщо це натискання на кнопку "Інший текст", ми редагуємо поточне повідомлення
+    // Якщо це натискання на кнопку "Інший текст" або "Тексти для перекладу"
     if (ctx.callbackQuery) {
         try {
             await ctx.editMessageText(message, {
-                reply_markup: createTextKeyboard(textData._id.toString()),
+                reply_markup: keyboard,
                 parse_mode: 'Markdown',
             });
-            await ctx.answerCallbackQuery().catch(() => console.log('⏳ Пропущено старий callback_query'));
+            await ctx.answerCallbackQuery(); 
         } catch (error: any) {
             // Перевіряємо, чи це помилка "текст не змінився"
             if (error.description && error.description.includes('message is not modified')) {
-                await ctx.answerCallbackQuery({ text: '🎲 Випав той самий текст. Натисни ще раз!' });
+                await ctx.answerCallbackQuery('🎲 Випав той самий текст. Натисни ще раз!');
             } else {
-                // Якщо сталася якась інша помилка
-                console.error('❌ Помилка редагування повідомлення:', error);
-                await ctx.answerCallbackQuery().catch(() => { }); // Відповідаємо, щоб кнопка не висіла
+                console.error('❌ Помилка редагування повідомлення (тексти):', error);
+                await ctx.answerCallbackQuery('Виникла помилка 😔'); 
             }
         }
     } else {
-        // Якщо це виклик через команду /text
+        // Якщо це виклик через команду /text або звичайне текстове меню
         await ctx.reply(message, {
-            reply_markup: createTextKeyboard(textData._id.toString()),
+            reply_markup: keyboard,
             parse_mode: 'Markdown',
         });
     }
@@ -62,10 +64,18 @@ export const handleShowTranslation = async (ctx: Context) => {
 
     const message = `🇬🇧 **Англійською:**\n_${textData.englishText}_\n\n🇺🇦 **Переклад:**\n_${textData.ukrainianTranslation}_`;
 
-    await ctx.editMessageText(message, {
-        // Залишаємо тільки кнопку "Інший текст"
-        reply_markup: new InlineKeyboard().text('🔄 Інший текст', 'next_text'),
-        parse_mode: 'Markdown',
-    });
-    await ctx.answerCallbackQuery().catch(() => console.log('⏳ Пропущено старий callback_query'));
+    // Підготовка до фічі "Мій профіль": тут можна зберігати прогрес
+    // await User.findOneAndUpdate({ telegramId: ctx.from?.id }, { $inc: { textsRead: 1 } });
+
+    try {
+        await ctx.editMessageText(message, {
+            // Залишаємо тільки кнопку "Інший текст"
+            reply_markup: new InlineKeyboard().text('🔄 Інший текст', 'next_text'),
+            parse_mode: 'Markdown',
+        });
+        await ctx.answerCallbackQuery();
+    } catch (error: any) {
+        console.error('❌ Помилка показу перекладу:', error);
+        await ctx.answerCallbackQuery('Сталася помилка при показі перекладу.');
+    }
 };

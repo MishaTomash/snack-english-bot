@@ -1,7 +1,6 @@
-import { Context, NextFunction } from 'grammy';
+import { Context, NextFunction, InlineKeyboard } from 'grammy';
 import { User } from '../../models/User';
 
-// Встановлюємо ліміт для безкоштовної версії
 const FREE_WORDS_LIMIT = 15;
 
 export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
@@ -19,26 +18,38 @@ export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
     const now = new Date();
     const lastLearn = user.lastWordLearnDate || new Date(0);
 
-    // Скидаємо час, щоб порівняти саме дати (дні)
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const lastLearnDay = new Date(lastLearn.getFullYear(), lastLearn.getMonth(), lastLearn.getDate());
 
-    // Якщо користувач востаннє вчив слова вчора (або раніше) — скидаємо лічильник
+    // Якщо почався новий день — скидаємо лічильник
     if (today.getTime() > lastLearnDay.getTime()) {
         user.wordsLearnedToday = 0;
-        user.lastWordLearnDate = now;
         await user.save();
     }
 
-    // Перевіряємо, чи не перевищено ліміт
+    // Перевіряємо ліміт
     if (user.wordsLearnedToday >= FREE_WORDS_LIMIT) {
-        return ctx.reply(
-            `🛑 Ти вичерпав свій денний ліміт для безкоштовної версії (*${FREE_WORDS_LIMIT} слів*).\n\n` +
-            `💎 Оформи Premium, щоб вчити необмежену кількість слів та отримати доступ до складних текстів: /premium`,
-            { parse_mode: 'Markdown' }
-        );
+        const message = `🛑 Ти вичерпав свій денний ліміт для безкоштовної версії (*${FREE_WORDS_LIMIT} слів*).\n\n` +
+                        `💎 Оформи Premium, щоб вчити необмежену кількість слів, отримувати озвучку та мати доступ до всіх функцій!`;
+        
+        const keyboard = new InlineKeyboard().text('💎 Отримати Premium', 'buy_premium');
+
+        // Якщо користувач клікнув інлайн-кнопку "Наступне слово"
+        if (ctx.callbackQuery) {
+            await ctx.answerCallbackQuery({ text: 'Денний ліміт вичерпано 🛑', show_alert: true });
+            return await ctx.editMessageText(message, { 
+                parse_mode: 'Markdown',
+                reply_markup: keyboard
+            });
+        }
+
+        // Якщо користувач викликав через меню / команду
+        return await ctx.reply(message, { 
+            parse_mode: 'Markdown',
+            reply_markup: keyboard 
+        });
     }
 
-    // Якщо ліміт не вичерпано — передаємо управління далі до команди видачі слів
+    // Якщо ліміт не вичерпано — передаємо управління далі
     await next();
 };
