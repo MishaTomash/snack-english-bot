@@ -8,12 +8,13 @@ import { sendRandomTest, handleTestAnswer } from './handlers/tests';
 import { trackActivity } from './middlewares/activity';
 import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
-import { sendPremiumOffer, handlePremiumPurchase } from './handlers/premium';
+// Імпортуємо нові обробники для Зірок
+import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
 
-// Реєструємо команди (прибрали дублікат words)
+// Реєструємо команди
 bot.command('start', handleStart);
 bot.command('words', checkWordLimits, handleWords);
 bot.command('text', sendRandomText);
@@ -28,11 +29,16 @@ bot.callbackQuery(/^trans_/, handleShowTranslation);
 bot.callbackQuery('next_text', sendRandomText);
 bot.callbackQuery(/^test_/, handleTestAnswer);
 bot.callbackQuery('next_test', sendRandomTest);
-bot.callbackQuery('buy_premium', handlePremiumPurchase);
 bot.callbackQuery('next_word', checkWordLimits, (ctx: any) => handleWords(ctx));
 
+// Якщо юзер тисне кнопку "Купити" під час повідомлення про ліміт, генеруємо йому рахунок
+bot.callbackQuery('buy_premium', (ctx: any) => sendPremiumOffer(ctx));
+
+// ⭐️ Обробка етапів оплати Зірками
+bot.on('pre_checkout_query', handlePreCheckoutQuery);
+bot.on('message:successful_payment', handleSuccessfulPayment);
+
 // Реєструємо обробник кнопок головного меню
-// Обгортаємо функції та додаємо checkWordLimits для кнопки "Нові слова"
 bot.hears('📚 Нові слова', checkWordLimits, (ctx) => handleWords(ctx));
 bot.hears('📝 Тексти для перекладу', (ctx) => sendRandomText(ctx));
 bot.hears('🎯 Міні-тести', (ctx) => sendRandomTest(ctx));
