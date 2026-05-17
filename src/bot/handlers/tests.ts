@@ -2,6 +2,7 @@ import { Context, InlineKeyboard } from 'grammy';
 import { User } from '../../models/User';
 import { getRandomTest } from '../../services/testService';
 import { createTestKeyboard } from '../keyboards/test';
+import { getAudioUrl } from '../../services/audioService';
 
 // Видача тесту
 export const sendRandomTest = async (ctx: Context) => {
@@ -55,6 +56,22 @@ export const handleTestAnswer = async (ctx: Context) => {
         const user = await User.findOne({ telegramId: ctx.from?.id });
         if (user) {
             user.testsPassed = (user.testsPassed || 0) + 1;
+
+            // 💎 Premium-фіча: Озвучка правильної відповіді
+            if (user.isPremium) {
+                const wordToPronounce = ctx.callbackQuery.message?.reply_markup?.inline_keyboard
+                    .flat()
+                    .find(btn => 'callback_data' in btn && btn.callback_data === callbackData)?.text;
+
+                if (wordToPronounce) {
+                    const audioUrl = getAudioUrl(wordToPronounce);
+
+                    await ctx.replyWithVoice(audioUrl, {
+                        caption: `🔊 Вимова: ${wordToPronounce}`
+                    });
+                }
+            }
+
             await user.save();
         }
     } else {

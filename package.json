@@ -21,6 +21,7 @@
   "homepage": "https://github.com/MishaTomash/snack-english-bot#readme",
   "dependencies": {
     "dotenv": "^17.4.2",
+    "google-tts-api": "^2.0.2",
     "grammy": "^1.43.0",
     "ioredis": "^5.10.1",
     "mongoose": "^9.6.2"
