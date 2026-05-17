@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { config } from '../config';
 import { handleStart } from './handlers/start';
 import { handleLevelSelection } from './handlers/level';
-import { handleWords } from './handlers/words';
+import { handleWords, handleWordAudio } from './handlers/words';
 import { sendRandomText, handleShowTranslation } from './handlers/texts';
 import { sendRandomTest, handleTestAnswer } from './handlers/tests';
 import { trackActivity } from './middlewares/activity';
@@ -30,8 +30,7 @@ bot.callbackQuery('next_text', sendRandomText);
 bot.callbackQuery(/^test_/, handleTestAnswer);
 bot.callbackQuery('next_test', sendRandomTest);
 bot.callbackQuery('next_word', checkWordLimits, (ctx: any) => handleWords(ctx));
-
-// Якщо юзер тисне кнопку "Купити" під час повідомлення про ліміт, генеруємо йому рахунок
+bot.callbackQuery(/^audio_/, (ctx: any) => handleWordAudio(ctx));
 bot.callbackQuery('buy_premium', (ctx: any) => sendPremiumOffer(ctx));
 
 // ⭐️ Обробка етапів оплати Зірками

@@ -12,6 +12,8 @@ export interface IUser extends Document {
     premiumExpiresAt?: Date; 
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
+    // Поле для очищення чату від аудіо-спаму 🧹
+    lastAudioMessageId?: number | null;
 }
 
 const UserSchema: Schema = new Schema({
@@ -20,11 +22,14 @@ const UserSchema: Schema = new Schema({
     streak: { type: Number, default: 0 },
     lastActive: { type: Date },
     wordsLearned: { type: Number, default: 0 },
+    testsPassed: { type: Number, default: 0 },
     // Налаштування Freemium 💎
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date }, 
     wordsLearnedToday: { type: Number, default: 0 },
-    lastWordLearnDate: { type: Date }
+    lastWordLearnDate: { type: Date },
+    // Зберігаємо ID останнього голосового повідомлення
+    lastAudioMessageId: { type: Number, default: null }
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
