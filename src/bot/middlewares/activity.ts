@@ -18,15 +18,15 @@ export const trackActivity = async (ctx: Context, next: NextFunction) => {
             const diffTime = Math.abs(today.getTime() - lastActiveDay.getTime());
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            if (diffDays === 1) {
+           if (diffDays === 1) {
                 // Користувач зайшов на наступний день
-                user.streakDays = (user.streakDays || 0) + 1; 
+                user.streak = (user.streak || 0) + 1; 
             } else if (diffDays > 1) {
                 // Користувач пропустив день — стрік скидається
-                user.streakDays = 1; 
-            } else if (!user.streakDays) {
+                user.streak = 1; 
+            } else if (!user.streak) {
                 // Перший запис активності
-                user.streakDays = 1;
+                user.streak = 1;
             }
 
             user.lastActive = now;
