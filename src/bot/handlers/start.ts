@@ -17,7 +17,7 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
       user = new User({ telegramId, firstName });
       await user.save();
 
-      await ctx.reply(`Привіт, ${firstName}! 👋\nЯ SnackEnglish — твій помічник для щоденного вивчення англійської.\n\nДавай почнемо! Обери свій поточний рівень:`, {
+      await ctx.reply(`Привіт, ${firstName}! 👋\n🌟 SnackEnglish допоможе тобі вивчати англійську легко та щодня.\n\nДавай почнемо! Обери свій поточний рівень:`, {
         reply_markup: levelKeyboard,
       });
     } else if (!user.level) {
