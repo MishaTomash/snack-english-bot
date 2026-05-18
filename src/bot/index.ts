@@ -13,7 +13,7 @@ import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } fro
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
 import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound } from './handlers/admin';
 import { handleAdminStats } from './handlers/admin';
-
+import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
 
 
 export const bot = new Bot(config.BOT_TOKEN);
@@ -39,6 +39,9 @@ bot.callbackQuery('next_word', checkWordLimits, (ctx: any) => handleWords(ctx));
 bot.callbackQuery(/^audio_/, (ctx: any) => handleWordAudio(ctx));
 bot.callbackQuery('buy_premium', (ctx: any) => sendPremiumOffer(ctx));
 bot.callbackQuery('change_level', handleChangeLevelClick);
+bot.callbackQuery(/^next_saved_/, handleNextSavedWord);
+bot.callbackQuery(/^del_saved_/, handleDeleteSavedWord);
+bot.callbackQuery(/^save_word_/, handleSaveWord);
 
 // ⭐️ Обробка етапів оплати Зірками
 bot.on('pre_checkout_query', handlePreCheckoutQuery);
@@ -57,3 +60,4 @@ bot.hears('➕ Додати слово', (ctx) => handleAddWordPrompt(ctx));
 bot.hears('➕ Додати тест', (ctx) => handleAddTestPrompt(ctx));
 bot.hears('➕ Додати текст', (ctx) => handleAddTextPrompt(ctx));
 bot.hears('📊 Статистика бази', (ctx) => handleAdminStats(ctx));
+bot.hears('📚 Словничок', (ctx) => handleSavedWords(ctx));

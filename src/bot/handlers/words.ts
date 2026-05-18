@@ -39,10 +39,11 @@ export const handleWords = async (ctx: Context) => {
             `🇬🇧 ${word.english}\n` +
             `🔤 ${word.transcription}`;
 
-        // Створюємо клавіатуру: кнопка озвучки + кнопка наступного слова
+        // Створюємо клавіатуру: кнопка озвучки + кнопки збереження та наступного слова
         const keyboard = new InlineKeyboard()
             .text('🔊 Слухати вимову', `audio_${word.english}`)
             .row()
+            .text('💾 Зберегти', `save_word_${word._id}`)
             .text('➡️ Наступне слово', 'next_word');
 
         // Відправляємо або редагуємо повідомлення

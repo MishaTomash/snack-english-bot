@@ -16,6 +16,7 @@ export interface IUser extends Document {
     lastAudioMessageId?: number | null;
     lastActivityDate?: Date;
     learnedWordIds?: string[];
+    savedWords: mongoose.Types.ObjectId[];
 }
 
 const UserSchema: Schema = new Schema({
@@ -34,6 +35,7 @@ const UserSchema: Schema = new Schema({
     lastAudioMessageId: { type: Number, default: null },
     lastActivityDate: {type: Date},
     learnedWordIds: { type: [String], default: [] },
+    savedWords: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Word' }],
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

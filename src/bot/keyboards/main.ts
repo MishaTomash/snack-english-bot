@@ -6,7 +6,9 @@ export const createMainMenu = () => {
         .row()
         .text('🎯 Міні-тести').text('👤 Мій профіль')
         .row()
-        .text('💎 Premium').text('⚙️ Налаштування') // Додали кнопку налаштувань
+        .text('💎 Premium').text('📚 Словничок')
+        .row()
+        .text('⚙️ Налаштування') // Додали кнопку налаштувань
         .row()
         .resized();
 };
