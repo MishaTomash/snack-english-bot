@@ -11,7 +11,7 @@ import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
-import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound } from './handlers/admin';
+import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers } from './handlers/admin';
 import { handleAdminStats } from './handlers/admin';
 import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
 
@@ -61,3 +61,4 @@ bot.hears('➕ Додати тест', (ctx) => handleAddTestPrompt(ctx));
 bot.hears('➕ Додати текст', (ctx) => handleAddTextPrompt(ctx));
 bot.hears('📊 Статистика бази', (ctx) => handleAdminStats(ctx));
 bot.hears('📚 Словничок', (ctx) => handleSavedWords(ctx));
+bot.hears('👥 Користувачі', handleAdminUsers);

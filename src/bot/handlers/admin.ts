@@ -12,7 +12,7 @@ export const handleAdminCommand = async (ctx: Context) => {
     const userId = ctx.from?.id;
 
     if (userId !== config.ADMIN_ID) {
-        return; 
+        return;
     }
 
     await ctx.reply('👨‍💻 *Ласкаво просимо до Адмін-панелі!*\n\nОберіть дію на клавіатурі знизу.', {
@@ -33,7 +33,7 @@ export const handleAddWordPrompt = async (ctx: Context) => {
     if (ctx.from?.id !== config.ADMIN_ID) return;
 
     const instruction = `📝 *Шаблон для додавання слова:*\n\n` +
-                        `\`word: A2 | Challenge | Виклик | Челендж\``;
+        `\`word: A2 | Challenge | Виклик | Челендж\``;
 
     await ctx.reply(instruction, { parse_mode: 'Markdown' });
 };
@@ -43,7 +43,7 @@ export const handleAddTestPrompt = async (ctx: Context) => {
     if (ctx.from?.id !== config.ADMIN_ID) return;
 
     const instruction = `🎯 *Шаблон для додавання міні-тесту:*\n\n` +
-                        `\`test: A1 | Як буде "вода"? | school, water, window, bread | water\``;
+        `\`test: A1 | Як буде "вода"? | school, water, window, bread | water\``;
 
     await ctx.reply(instruction, { parse_mode: 'Markdown' });
 };
@@ -53,8 +53,8 @@ export const handleAddTextPrompt = async (ctx: Context) => {
     if (ctx.from?.id !== config.ADMIN_ID) return;
 
     const instruction = `📖 *Шаблон для додавання тексту для перекладу:*\n\n` +
-                        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
-                        `\`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.\``;
+        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
+        `\`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.\``;
 
     await ctx.reply(instruction, { parse_mode: 'Markdown' });
 };
@@ -64,7 +64,7 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
     if (ctx.from?.id !== config.ADMIN_ID) {
         return await next();
     }
-    
+
     const textData = ctx.message?.text;
     if (!textData) return await next();
 
@@ -94,8 +94,8 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
 
             await Word.create({
                 level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
-                english,       
-                ukrainian,     
+                english,
+                ukrainian,
                 transcription
             });
 
@@ -225,5 +225,48 @@ export const handleAdminStats = async (ctx: Context) => {
     } catch (error) {
         console.error('Помилка збору адмін-статистики:', error);
         await ctx.reply('❌ Не вдалося завантажити статистику бази даних.');
+    }
+};
+
+export const handleAdminUsers = async (ctx: Context) => {
+    // Перевірка на адміна
+    if (ctx.from?.id !== config.ADMIN_ID) return;
+
+    try {
+        const users = await User.find({});
+        const totalUsers = users.length;
+
+        if (totalUsers === 0) {
+            return ctx.reply('📭 У боті поки немає зареєстрованих користувачів.');
+        }
+
+        // Використовуємо HTML-теги <b> для жирного тексту
+        let message = `👥 <b>Статистика користувачів</b>\n\n`;
+        message += `Всього: <b>${totalUsers}</b>\n\n`;
+
+        const limit = Math.min(totalUsers, 50);
+        message += `📋 <b>Список (перші ${limit}):</b>\n`;
+
+        for (let i = 0; i < limit; i++) {
+            const u = users[i];
+            const level = u.level ? u.level : 'Не обрано';
+
+            // Якщо в імені випадково є символи < або >, екрануємо їх, щоб HTML не зламався
+            let name = u.firstName ? u.firstName.replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Анонім';
+            const username = u.username ? ` (@${u.username})` : '';
+
+            // Використовуємо <code> для ID, щоб його можна було легко копіювати
+            message += `${i + 1}. <b>${name}</b>${username} | ID: <code>${u.telegramId}</code> | Рівень: ${level}\n`;
+        }
+
+        if (totalUsers > 50) {
+            message += `\n...та ще ${totalUsers - 50} користувачів.`;
+        }
+
+        // Змінюємо parse_mode на 'HTML'
+        await ctx.reply(message, { parse_mode: 'HTML' });
+    } catch (error) {
+        console.error('Помилка при отриманні користувачів:', error);
+        await ctx.reply('❌ Помилка при завантаженні списку.');
     }
 };

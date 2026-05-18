@@ -9,7 +9,7 @@ export interface IUser extends Document {
     testsPassed?: number;
     // Нові поля для системи Freemium 💎
     isPremium: boolean;
-    premiumExpiresAt?: Date; 
+    premiumExpiresAt?: Date;
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
     // Поле для очищення чату від аудіо-спаму 🧹
@@ -17,6 +17,8 @@ export interface IUser extends Document {
     lastActivityDate?: Date;
     learnedWordIds?: string[];
     savedWords: mongoose.Types.ObjectId[];
+    username?: string;
+    firstName?: string;
 }
 
 const UserSchema: Schema = new Schema({
@@ -28,14 +30,16 @@ const UserSchema: Schema = new Schema({
     testsPassed: { type: Number, default: 0 },
     // Налаштування Freemium 💎
     isPremium: { type: Boolean, default: false },
-    premiumExpiresAt: { type: Date }, 
+    premiumExpiresAt: { type: Date },
     wordsLearnedToday: { type: Number, default: 0 },
     lastWordLearnDate: { type: Date },
     // Зберігаємо ID останнього голосового повідомлення
     lastAudioMessageId: { type: Number, default: null },
-    lastActivityDate: {type: Date},
+    lastActivityDate: { type: Date },
     learnedWordIds: { type: [String], default: [] },
     savedWords: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Word' }],
+    username: { type: String, required: false },
+    firstName: { type: String, required: false },
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

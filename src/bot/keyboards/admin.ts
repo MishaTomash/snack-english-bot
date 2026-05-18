@@ -6,6 +6,6 @@ export const createAdminMenu = () => {
         .row()
         .text('➕ Додати текст').text('📊 Статистика бази')
         .row()
-        .text('🚪 Вийти з адмінки')
+        .text('🚪 Вийти з адмінки').text('👥 Користувачі')
         .resized();
 };
