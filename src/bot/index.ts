@@ -11,7 +11,9 @@ import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
-import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAdminTextInbound, handleAddTestPrompt} from './handlers/admin';
+import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound } from './handlers/admin';
+
+
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
 
@@ -51,3 +53,4 @@ bot.hears('⚙️ Налаштування', (ctx) => showSettings(ctx));
 bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
 bot.hears('➕ Додати слово', (ctx) => handleAddWordPrompt(ctx));
 bot.hears('➕ Додати тест', (ctx) => handleAddTestPrompt(ctx));
+bot.hears('➕ Додати текст', (ctx) => handleAddTextPrompt(ctx));

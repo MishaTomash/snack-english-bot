@@ -3,7 +3,8 @@ import { config } from '../../config';
 import { createAdminMenu } from '../keyboards/admin';
 import { createMainMenu } from '../keyboards/main';
 import { Word } from '../../models/Word';
-import { TestQuestion } from '../../models/TestQuestion'; // Імпортуємо твою точну модель
+import { TestQuestion } from '../../models/TestQuestion';
+import { Text } from '../../models/Text'; // Імпортуємо твою точну модель тексту
 
 // Інструкція для команди /admin
 export const handleAdminCommand = async (ctx: Context) => {
@@ -31,7 +32,6 @@ export const handleAddWordPrompt = async (ctx: Context) => {
     if (ctx.from?.id !== config.ADMIN_ID) return;
 
     const instruction = `📝 *Шаблон для додавання слова:*\n\n` +
-                        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
                         `\`word: A2 | Challenge | Виклик | Челендж\``;
 
     await ctx.reply(instruction, { parse_mode: 'Markdown' });
@@ -42,29 +42,39 @@ export const handleAddTestPrompt = async (ctx: Context) => {
     if (ctx.from?.id !== config.ADMIN_ID) return;
 
     const instruction = `🎯 *Шаблон для додавання міні-тесту:*\n\n` +
-                        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
                         `\`test: A1 | Як буде "вода"? | school, water, window, bread | water\``;
 
     await ctx.reply(instruction, { parse_mode: 'Markdown' });
 };
 
-// Головний обробник тексту адмінки (слова + тестики)
+// Інструкція для кнопки "Додати text"
+export const handleAddTextPrompt = async (ctx: Context) => {
+    if (ctx.from?.id !== config.ADMIN_ID) return;
+
+    const instruction = `📖 *Шаблон для додавання тексту для перекладу:*\n\n` +
+                        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
+                        `\`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.\``;
+
+    await ctx.reply(instruction, { parse_mode: 'Markdown' });
+};
+
+// Головний обробник тексту адмінки (слова + тести + тексти)
 export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<void>) => {
     if (ctx.from?.id !== config.ADMIN_ID) {
         return await next();
     }
     
-    const text = ctx.message?.text;
-    if (!text) return await next();
+    const textData = ctx.message?.text;
+    if (!textData) return await next();
 
     // 1. ОБРОБКА ДОДАВАННЯ СЛОВА
-    if (text.startsWith('word:')) {
+    if (textData.startsWith('word:')) {
         try {
-            const rawData = text.replace('word:', '').trim();
+            const rawData = textData.replace('word:', '').trim();
             const parts = rawData.split('|').map(item => item.trim());
 
             if (parts.length < 4) {
-                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Перевірте наявність усіх трьох розділювачів `|`.', { parse_mode: 'Markdown' });
+                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Потрібно 4 блоки розділені через `|`.', { parse_mode: 'Markdown' });
             }
 
             const inputLevel = parts[0];
@@ -96,9 +106,9 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
     }
 
     // 2. ОБРОБКА ДОДАВАННЯ ТЕСТУ
-    if (text.startsWith('test:')) {
+    if (textData.startsWith('test:')) {
         try {
-            const rawData = text.replace('test:', '').trim();
+            const rawData = textData.replace('test:', '').trim();
             const parts = rawData.split('|').map(item => item.trim());
 
             if (parts.length < 4) {
@@ -114,18 +124,15 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
                 return ctx.reply('❌ *Помилка:* Ви пропустили якесь із полів.', { parse_mode: 'Markdown' });
             }
 
-            // Розбиваємо варіанти відповідей через кому
             const options = rawOptions.split(',').map(item => item.trim());
             if (options.length < 2) {
-                return ctx.reply('❌ *Помилка:* Тест повинен мати хоча б 2 варіанти відповідей через кому.', { parse_mode: 'Markdown' });
+                return ctx.reply('❌ *Помилка:* Тест повинен мати хоча б 2 варіанти відповідей.', { parse_mode: 'Markdown' });
             }
 
-            // Знаходимо індекс правильної відповіді в масиві варіантів
             const correctOptionIndex = options.indexOf(correctAnswerText);
-
-            // Якщо такого слова немає серед варіантів — indexOf поверне -1
             if (correctOptionIndex === -1) {
-                return ctx.reply(`❌ *Помилка:* Правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів рядка: \`${rawOptions}\``, { parse_mode: 'Markdown' });
+                // Виправлено: Прибрали некоректний parse_markup
+                return ctx.reply(`❌ *Помилка:* Правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів.`, { parse_mode: 'Markdown' });
             }
 
             const allowedLevels = ['A1', 'A2', 'B1', 'B2'];
@@ -133,7 +140,6 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
                 return ctx.reply(`❌ *Помилка:* Рівень *${inputLevel}* не підтримується.`, { parse_mode: 'Markdown' });
             }
 
-            // Зберігаємо в MongoDB згідно з твоєю точною схемою TestQuestion
             await TestQuestion.create({
                 level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
                 question,
@@ -141,13 +147,49 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
                 correctOptionIndex
             });
 
-            return ctx.reply(`✅ *Міні-тест успішно додано!*\n\n📊 Рівень: *${inputLevel}*\n❓ Питання: *${question}*\n🔢 Індекс правильної відповіді: *${correctOptionIndex}*`, { parse_mode: 'Markdown' });
+            return ctx.reply(`✅ *Міні-тест успішно додано!*`, { parse_mode: 'Markdown' });
         } catch (error) {
-            console.error('Помилка додавання тесту:', error);
-            return ctx.reply('❌ Відбулася помилка при збереженні тесту.');
+            console.error(error);
+            return ctx.reply('❌ Помилка при збереженні тесту.');
         }
     }
 
-    // Якщо текст не адмінський — передаємо далі звичайним кнопкам
+    // 3. ОБРОБКА ДОДАВАННЯ ТЕКСТУ
+    if (textData.startsWith('text:')) {
+        try {
+            const rawData = textData.replace('text:', '').trim();
+            const parts = rawData.split('|').map(item => item.trim());
+
+            if (parts.length < 3) {
+                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Потрібно 3 блоки розділені через `|` (рівень | англійська | переклад).', { parse_mode: 'Markdown' });
+            }
+
+            const inputLevel = parts[0];
+            const english = parts[1];
+            const ukrainian = parts[2];
+
+            if (!inputLevel || !english || !ukrainian) {
+                return ctx.reply('❌ *Помилка:* Ви пропустили якесь із полів.', { parse_mode: 'Markdown' });
+            }
+
+            const allowedLevels = ['A1', 'A2', 'B1', 'B2'];
+            if (!allowedLevels.includes(inputLevel)) {
+                return ctx.reply(`❌ *Помилка:* Рівень *${inputLevel}* не підтримується.`, { parse_mode: 'Markdown' });
+            }
+
+            // Зберігаємо в базу даних згідно з точними назвами властивостей твоєї моделі Text
+            await Text.create({
+                level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
+                englishText: english,               // Змінено на englishText
+                ukrainianTranslation: ukrainian     // Змінено на ukrainianTranslation
+            });
+
+            return ctx.reply(`✅ *Текст успішно додано!*\n\n📊 Рівень: *${inputLevel}*\n🇬🇧 Англійська: _${english}_\n🇺🇦 Переклад: _${ukrainian}_`, { parse_mode: 'Markdown' });
+        } catch (error) {
+            console.error('Помилка додавання тексту:', error);
+            return ctx.reply('❌ Відбулася помилка при збереженні тексту в базу даних.');
+        }
+    }
+
     return await next();
 };
