@@ -11,8 +11,7 @@ import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
-import { handleAdminCommand, handleExitAdmin } from './handlers/admin';
-
+import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAdminTextInbound } from './handlers/admin';
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
 
@@ -40,6 +39,7 @@ bot.callbackQuery('change_level', handleChangeLevelClick);
 // ⭐️ Обробка етапів оплати Зірками
 bot.on('pre_checkout_query', handlePreCheckoutQuery);
 bot.on('message:successful_payment', handleSuccessfulPayment);
+bot.on('message:text', (ctx, next) => handleAdminTextInbound(ctx, next));
 
 // Реєструємо обробник кнопок головного меню
 bot.hears('📚 Нові слова', checkWordLimits, (ctx) => handleWords(ctx));
@@ -49,3 +49,4 @@ bot.hears('👤 Мій профіль', (ctx) => showProfile(ctx));
 bot.hears('💎 Premium', (ctx) => sendPremiumOffer(ctx));
 bot.hears('⚙️ Налаштування', (ctx) => showSettings(ctx));
 bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
+bot.hears('➕ Додати слово', (ctx) => handleAddWordPrompt(ctx));
