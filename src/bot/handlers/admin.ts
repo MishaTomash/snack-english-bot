@@ -1,4 +1,4 @@
-import { Context } from 'grammy';
+import { Context, NextFunction } from 'grammy';
 import { config } from '../../config';
 import { createAdminMenu } from '../keyboards/admin';
 import { createMainMenu } from '../keyboards/main';
@@ -269,4 +269,76 @@ export const handleAdminUsers = async (ctx: Context) => {
         console.error('Помилка при отриманні користувачів:', error);
         await ctx.reply('❌ Помилка при завантаженні списку.');
     }
+};
+
+export const adminState = new Map<number, string>();
+
+// Функція-обробник натискання кнопки "📢 Розсилка"
+export const handleBroadcastStart = async (ctx: Context) => {
+    // if (ctx.from?.id !== config.ADMIN_ID) return; // розкоментуй, якщо в тебе є перевірка на адміна
+
+    const adminId = ctx.from!.id;
+    adminState.set(adminId, 'waiting_for_broadcast');
+
+    await ctx.reply(
+        '📢 <b>Режим розсилки</b>\n\n' +
+        'Відправ мені повідомлення, яке ти хочеш надіслати всім користувачам. Це може бути текст, фото або навіть відео!\n\n' +
+        '<i>(Для скасування напиши /cancel)</i>', 
+        { parse_mode: 'HTML' }
+    );
+};
+
+// Функція-перехоплювач повідомлення для розсилки
+export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
+    const adminId = ctx.from?.id;
+    if (!adminId) return next();
+
+    // Перевіряємо, чи знаходиться адмін у стані створення розсилки
+    const state = adminState.get(adminId);
+    if (state === 'waiting_for_broadcast') {
+        
+        // Скасування розсилки
+        if (ctx.message?.text === '/cancel') {
+            adminState.delete(adminId);
+            return ctx.reply('🚫 Розсилку скасовано.');
+        }
+
+        // Починаємо розсилку
+        adminState.delete(adminId);
+        await ctx.reply('⏳ Починаю розсилку... Це може зайняти трохи часу.');
+
+        try {
+            const users = await User.find({});
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const user of users) {
+                try {
+                    // Використовуємо copyMessage, щоб можна було слати фото/відео з текстом
+                    await ctx.copyMessage(user.telegramId);
+                    successCount++;
+                    
+                    // Пауза 50мс для уникнення лімітів Telegram (не більше 30 повідомлень на секунду)
+                    await new Promise(res => setTimeout(res, 50)); 
+                } catch (e) {
+                    // Якщо юзер заблокував бота, буде помилка
+                    failCount++;
+                }
+            }
+
+            await ctx.reply(
+                `✅ <b>Розсилка завершена!</b>\n\n` +
+                `Успішно доставлено: <b>${successCount}</b>\n` +
+                `Заблокували бота: <b>${failCount}</b>`, 
+                { parse_mode: 'HTML' }
+            );
+        } catch (error) {
+            console.error('Помилка масової розсилки:', error);
+            await ctx.reply('❌ Відбулася критична помилка під час розсилки.');
+        }
+        return; // Завершуємо обробку, щоб повідомлення не пішло в інші обробники
+    }
+
+    // Якщо це звичайне повідомлення, передаємо його далі
+    return next();
 };

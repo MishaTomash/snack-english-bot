@@ -11,7 +11,7 @@ import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
-import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers } from './handlers/admin';
+import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,handleBroadcastStart, handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers,handleAdminMessages } from './handlers/admin';
 import { handleAdminStats } from './handlers/admin';
 import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
 
@@ -47,6 +47,7 @@ bot.callbackQuery(/^save_word_/, handleSaveWord);
 bot.on('pre_checkout_query', handlePreCheckoutQuery);
 bot.on('message:successful_payment', handleSuccessfulPayment);
 bot.on('message:text', (ctx, next) => handleAdminTextInbound(ctx, next));
+bot.on('message', handleAdminMessages);
 
 // Реєструємо обробник кнопок головного меню
 bot.hears('📚 Нові слова', checkWordLimits, (ctx) => handleWords(ctx));
@@ -62,3 +63,4 @@ bot.hears('➕ Додати текст', (ctx) => handleAddTextPrompt(ctx));
 bot.hears('📊 Статистика бази', (ctx) => handleAdminStats(ctx));
 bot.hears('📚 Словничок', (ctx) => handleSavedWords(ctx));
 bot.hears('👥 Користувачі', handleAdminUsers);
+bot.hears('📢 Розсилка', handleBroadcastStart);
