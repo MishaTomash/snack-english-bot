@@ -1,6 +1,6 @@
 import { Context } from 'grammy';
 import { User } from '../../models/User';
-import { mainMenuKeyboard } from '../keyboards/main';
+import { createMainMenu } from '../keyboards/main';
 
 export const handleLevelSelection = async (ctx: Context) => {
     const callbackData = ctx.callbackQuery?.data;
@@ -26,7 +26,7 @@ export const handleLevelSelection = async (ctx: Context) => {
     
     // Надсилаємо нове повідомлення з головним меню
     await ctx.reply('Обери, з чого почнемо сьогодні? 👇', {
-        reply_markup: mainMenuKeyboard
+        reply_markup: createMainMenu()
     });
 
     await ctx.answerCallbackQuery();

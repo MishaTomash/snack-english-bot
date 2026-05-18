@@ -10,6 +10,7 @@ import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
+import { showSettings, handleChangeLevelClick } from './handlers/settings';
 
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
@@ -32,6 +33,7 @@ bot.callbackQuery('next_test', sendRandomTest);
 bot.callbackQuery('next_word', checkWordLimits, (ctx: any) => handleWords(ctx));
 bot.callbackQuery(/^audio_/, (ctx: any) => handleWordAudio(ctx));
 bot.callbackQuery('buy_premium', (ctx: any) => sendPremiumOffer(ctx));
+bot.callbackQuery('change_level', handleChangeLevelClick);
 
 // ⭐️ Обробка етапів оплати Зірками
 bot.on('pre_checkout_query', handlePreCheckoutQuery);
@@ -43,3 +45,4 @@ bot.hears('📝 Тексти для перекладу', (ctx) => sendRandomText
 bot.hears('🎯 Міні-тести', (ctx) => sendRandomTest(ctx));
 bot.hears('👤 Мій профіль', (ctx) => showProfile(ctx));
 bot.hears('💎 Premium', (ctx) => sendPremiumOffer(ctx));
+bot.hears('⚙️ Налаштування', (ctx) => showSettings(ctx));
