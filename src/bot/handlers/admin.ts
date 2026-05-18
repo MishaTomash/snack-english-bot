@@ -5,6 +5,7 @@ import { createMainMenu } from '../keyboards/main';
 import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
 import { Text } from '../../models/Text'; // Імпортуємо твою точну модель тексту
+import { User } from '../../models/User';
 
 // Інструкція для команди /admin
 export const handleAdminCommand = async (ctx: Context) => {
@@ -192,4 +193,37 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
     }
 
     return await next();
+};
+export const handleAdminStats = async (ctx: Context) => {
+    if (ctx.from?.id !== config.ADMIN_ID) return;
+
+    try {
+        // Рахуємо користувачів у базі даних (тепер використовуємо просто User)
+        const totalUsers = await User.countDocuments();
+        const premiumUsers = await User.countDocuments({ isPremium: true });
+
+        const levels = ['A1', 'A2', 'B1', 'B2'] as const;
+
+        let statsMessage = `📊 *ДЕТАЛЬНА СТАТИСТИКА БАЗИ ДАНИХ*\n\n`;
+        statsMessage += `👥 Усього користувачів: *${totalUsers}*\n`;
+        statsMessage += `💎 З них з Premium: *${premiumUsers}*\n\n`;
+        statsMessage += `🗂 *Наповнення контентом за рівнями:*\n`;
+
+        // Збираємо статистику по базі даних
+        for (const lvl of levels) {
+            const wordsCount = await Word.countDocuments({ level: lvl });
+            const testsCount = await TestQuestion.countDocuments({ level: lvl });
+            const textsCount = await Text.countDocuments({ level: lvl });
+
+            statsMessage += `\n📈 *Рівень ${lvl}:*\n`;
+            statsMessage += `  ▫️ Слова/Фрази: *${wordsCount}*\n`;
+            statsMessage += `  ▫️ Міні-тести: *${testsCount}*\n`;
+            statsMessage += `  ▫️ Тексти для перекладу: *${textsCount}*\n`;
+        }
+
+        await ctx.reply(statsMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+        console.error('Помилка збору адмін-статистики:', error);
+        await ctx.reply('❌ Не вдалося завантажити статистику бази даних.');
+    }
 };

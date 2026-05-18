@@ -12,6 +12,8 @@ import { checkWordLimits } from './middlewares/limits';
 import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
 import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt, handleAdminTextInbound } from './handlers/admin';
+import { handleAdminStats } from './handlers/admin';
+
 
 
 export const bot = new Bot(config.BOT_TOKEN);
@@ -54,3 +56,4 @@ bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
 bot.hears('➕ Додати слово', (ctx) => handleAddWordPrompt(ctx));
 bot.hears('➕ Додати тест', (ctx) => handleAddTestPrompt(ctx));
 bot.hears('➕ Додати текст', (ctx) => handleAddTextPrompt(ctx));
+bot.hears('📊 Статистика бази', (ctx) => handleAdminStats(ctx));
