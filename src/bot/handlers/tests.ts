@@ -3,6 +3,7 @@ import { User } from '../../models/User';
 import { getRandomTest } from '../../services/testService';
 import { createTestKeyboard } from '../keyboards/test';
 import { getAudioUrl } from '../../services/audioService';
+import { updateUserProgress } from '../../services/progressService'; // 🔥 Імпортуємо наш сервіс прогресу
 
 // Видача тесту
 export const sendRandomTest = async (ctx: Context) => {
@@ -44,8 +45,9 @@ export const sendRandomTest = async (ctx: Context) => {
 
 // Обробка відповіді
 export const handleTestAnswer = async (ctx: Context) => {
+    const telegramId = ctx.from?.id;
     const callbackData = ctx.callbackQuery?.data;
-    if (!callbackData) return;
+    if (!callbackData || !telegramId) return;
 
     const parts = callbackData.split('_');
     const isCorrect = parts[2] === '1'; // Перевіряємо наш прапорець
@@ -53,26 +55,24 @@ export const handleTestAnswer = async (ctx: Context) => {
     if (isCorrect) {
         await ctx.answerCallbackQuery({ text: '✅ Правильно! Молодець!', show_alert: true });
 
-        const user = await User.findOne({ telegramId: ctx.from?.id });
-        if (user) {
-            user.testsPassed = (user.testsPassed || 0) + 1;
+        // 🔥 МАГІЯ ПРОГРЕСУ: Оновлюємо статистику тестів та вогники активності
+        await updateUserProgress(telegramId, 'test');
 
-            // 💎 Premium-фіча: Озвучка правильної відповіді
-            if (user.isPremium) {
-                const wordToPronounce = ctx.callbackQuery.message?.reply_markup?.inline_keyboard
-                    .flat()
-                    .find(btn => 'callback_data' in btn && btn.callback_data === callbackData)?.text;
+        // Дістаємо користувача з бази, щоб перевірити наявність Premium для озвучки
+        const user = await User.findOne({ telegramId });
+        
+        if (user && user.isPremium) {
+            const wordToPronounce = ctx.callbackQuery?.message?.reply_markup?.inline_keyboard
+                .flat()
+                .find(btn => 'callback_data' in btn && btn.callback_data === callbackData)?.text;
 
-                if (wordToPronounce) {
-                    const audioUrl = getAudioUrl(wordToPronounce);
+            if (wordToPronounce) {
+                const audioUrl = getAudioUrl(wordToPronounce);
 
-                    await ctx.replyWithVoice(audioUrl, {
-                        caption: `🔊 Вимова: ${wordToPronounce}`
-                    });
-                }
+                await ctx.replyWithVoice(audioUrl, {
+                    caption: `🔊 Вимова: ${wordToPronounce}`
+                }).catch(err => console.error('Помилка відправки аудіо для тесту:', err));
             }
-
-            await user.save();
         }
     } else {
         await ctx.answerCallbackQuery({ text: '❌ Неправильно. Спробуй ще раз!', show_alert: true });

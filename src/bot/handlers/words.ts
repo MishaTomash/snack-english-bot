@@ -2,6 +2,7 @@ import { Context, InlineKeyboard } from 'grammy';
 import { User } from '../../models/User';
 import { getRandomWords } from '../../services/wordService';
 import { getAudioUrl } from '../../services/audioService'; // Імпортуємо сервіс озвучки
+import { updateUserProgress } from '../../services/progressService'; // Сервіс прогресу
 
 export const handleWords = async (ctx: Context) => {
     const telegramId = ctx.from?.id;
@@ -21,6 +22,7 @@ export const handleWords = async (ctx: Context) => {
                 // Сховище Telegram могло застаріти, або користувач сам видалив, тому просто ігноруємо помилку
             });
             user.lastAudioMessageId = null;
+            await user.save(); // Зберігаємо статус очищеного аудіо
         }
 
         const words = await getRandomWords(user.level);
@@ -32,16 +34,10 @@ export const handleWords = async (ctx: Context) => {
 
         const word = words[0];
 
-        const message = `📚 **Твоє слово на сьогодні (Рівень ${user.level}):**\n\n` +
-                        `🇺🇦 ${word.ukrainian}\n` +
-                        `🇬🇧 ${word.english}\n` +
-                        `🔤 ${word.transcription}`;
-
-        user.wordsLearned = (user.wordsLearned || 0) + 1;
-        user.wordsLearnedToday = (user.wordsLearnedToday || 0) + 1;
-        user.lastWordLearnDate = new Date(); 
-
-        await user.save();
+        const message = `📚 *Твоє слово на сьогодні (Рівень ${user.level}):*\n\n` +
+            `🇺🇦 ${word.ukrainian}\n` +
+            `🇬🇧 ${word.english}\n` +
+            `🔤 ${word.transcription}`;
 
         // Створюємо клавіатуру: кнопка озвучки + кнопка наступного слова
         const keyboard = new InlineKeyboard()
@@ -49,18 +45,23 @@ export const handleWords = async (ctx: Context) => {
             .row()
             .text('➡️ Наступне слово', 'next_word');
 
+        // Відправляємо або редагуємо повідомлення
         if (ctx.callbackQuery) {
-            await ctx.editMessageText(message, { 
+            await ctx.editMessageText(message, {
                 parse_mode: 'Markdown',
                 reply_markup: keyboard
             });
-            await ctx.answerCallbackQuery(); 
+            await ctx.answerCallbackQuery();
         } else {
-            await ctx.reply(message, { 
+            await ctx.reply(message, {
                 parse_mode: 'Markdown',
                 reply_markup: keyboard
             });
         }
+
+        // 🔥 МАГІЯ ПРОГРЕСУ: Оновлюємо статистику та вогники через єдиний сервіс!
+        await updateUserProgress(telegramId, 'word', word._id.toString());
+
     } catch (error: any) {
         if (error.description && error.description.includes('message is not modified')) {
             if (ctx.callbackQuery) {
@@ -88,7 +89,7 @@ export const handleWordAudio = async (ctx: Context) => {
 
         // 🧹 ОЧИЩЕННЯ ЧАТУ: Якщо вже є надіслане аудіо, видаляємо його перед надсиланням нового
         if (user && user.lastAudioMessageId) {
-            await ctx.api.deleteMessage(ctx.chat!.id, user.lastAudioMessageId).catch(() => {});
+            await ctx.api.deleteMessage(ctx.chat!.id, user.lastAudioMessageId).catch(() => { });
         }
 
         const audioUrl = getAudioUrl(wordToPronounce);

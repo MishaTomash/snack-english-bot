@@ -14,6 +14,8 @@ export interface IUser extends Document {
     lastWordLearnDate?: Date;
     // Поле для очищення чату від аудіо-спаму 🧹
     lastAudioMessageId?: number | null;
+    lastActivityDate?: Date;
+    learnedWordIds?: string[];
 }
 
 const UserSchema: Schema = new Schema({
@@ -29,7 +31,9 @@ const UserSchema: Schema = new Schema({
     wordsLearnedToday: { type: Number, default: 0 },
     lastWordLearnDate: { type: Date },
     // Зберігаємо ID останнього голосового повідомлення
-    lastAudioMessageId: { type: Number, default: null }
+    lastAudioMessageId: { type: Number, default: null },
+    lastActivityDate: {type: Date},
+    learnedWordIds: { type: [String], default: [] },
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
