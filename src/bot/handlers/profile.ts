@@ -45,8 +45,8 @@ export const showProfile = async (ctx: Context) => {
         const streakEmoji = streak > 0 ? '🔥'.repeat(Math.min(streak, 3)) : '💤';
 
         const message = `👤 *ТВІЙ ПРОФІЛЬ SNACKENGLISH*\n\n` +
-                        `🎓 *Поточний рівень:* ${user.level || 'Не обрано'}\n` +
-                        `⭐️ *Статус акаунту:* ${accountStatus}${premiumInfo}\n\n` +
+                        `🎓 *Поточний рівень:* ${user.level || 'Не обрано'}\n\n` +
+                        // `⭐️ *Статус акаунту:* ${accountStatus}${premiumInfo}\n\n` +
                         `📊 *Твій прогрес навчання:*\n` +
                         `${streakEmoji} Активність: *${streak} дн. поспіль*\n` +
                         `📚 Вивчено слів всього: *${wordsLearned}*\n` +

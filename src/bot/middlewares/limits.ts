@@ -1,7 +1,7 @@
 import { Context, NextFunction, InlineKeyboard } from 'grammy';
 import { User } from '../../models/User';
 
-const FREE_WORDS_LIMIT = 15;
+const FREE_WORDS_LIMIT = 9999;
 
 export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
     const telegramId = ctx.from?.id;
