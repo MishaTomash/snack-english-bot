@@ -9,11 +9,17 @@ import { trackActivity } from './middlewares/activity';
 import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
 // Імпортуємо нові обробники для Зірок
-import { sendPremiumOffer, handlePreCheckoutQuery, handleSuccessfulPayment } from './handlers/premium';
+import { sendPremiumOffer, handlePreCheckoutQuery } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
 import { handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,handleBroadcastStart, handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers,handleAdminMessages } from './handlers/admin';
 import { handleAdminStats } from './handlers/admin';
 import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
+import { 
+    handleSupportMenu, 
+    handleStarsInvoice, 
+    handlePreCheckout, 
+    handleSuccessfulPayment 
+} from './handlers/support';
 
 
 export const bot = new Bot(config.BOT_TOKEN);
@@ -30,6 +36,7 @@ bot.command('premium', sendPremiumOffer);
 bot.command('admin', handleAdminCommand);
 
 // Реєструємо обробник інлайн-кнопок
+bot.callbackQuery(/^stars_/, handleStarsInvoice);
 bot.callbackQuery(/^level_/, handleLevelSelection);
 bot.callbackQuery(/^trans_/, handleShowTranslation);
 bot.callbackQuery('next_text', sendRandomText);
@@ -45,9 +52,11 @@ bot.callbackQuery(/^save_word_/, handleSaveWord);
 
 // ⭐️ Обробка етапів оплати Зірками
 bot.on('pre_checkout_query', handlePreCheckoutQuery);
-bot.on('message:successful_payment', handleSuccessfulPayment);
+// bot.on('message:successful_payment', handleSuccessfulPayment);
 bot.on('message:text', (ctx, next) => handleAdminTextInbound(ctx, next));
 bot.on('message', handleAdminMessages);
+bot.on('pre_checkout_query', handlePreCheckout);
+bot.on('message:successful_payment', handleSuccessfulPayment);
 
 // Реєструємо обробник кнопок головного меню
 bot.hears('📚 Нові слова', checkWordLimits, (ctx) => handleWords(ctx));
@@ -64,3 +73,4 @@ bot.hears('📊 Статистика бази', (ctx) => handleAdminStats(ctx));
 bot.hears('📚 Словничок', (ctx) => handleSavedWords(ctx));
 bot.hears('👥 Користувачі', handleAdminUsers);
 bot.hears('📢 Розсилка', handleBroadcastStart);
+bot.hears('💖 Підтримати', handleSupportMenu);
