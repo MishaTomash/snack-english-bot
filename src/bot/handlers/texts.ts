@@ -14,7 +14,7 @@ export const sendRandomText = async (ctx: Context) => {
         return ctx.reply('Будь ласка, спочатку обери свій рівень: /start');
     }
 
-    const textData = await getRandomText(user.level);
+    const textData = await getRandomText(user);
     if (!textData) {
         if (ctx.callbackQuery) await ctx.answerCallbackQuery();
         return ctx.reply('На жаль, для твого рівня поки немає текстів 😔');

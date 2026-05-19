@@ -15,7 +15,7 @@ export const sendRandomTest = async (ctx: Context) => {
         return ctx.reply('Будь ласка, спочатку обери свій рівень: /start');
     }
 
-    const testData = await getRandomTest(user.level);
+    const testData = await getRandomTest(user);
     if (!testData) {
         return ctx.reply('На жаль, для твого рівня поки немає тестів 😔');
     }

@@ -19,6 +19,9 @@ export interface IUser extends Document {
     savedWords: mongoose.Types.ObjectId[];
     username?: string;
     firstName?: string;
+    seenWords: Schema.Types.ObjectId[];
+    seenTexts: Schema.Types.ObjectId[];
+    seenTests: Schema.Types.ObjectId[];
 }
 
 const UserSchema: Schema = new Schema({
@@ -40,6 +43,9 @@ const UserSchema: Schema = new Schema({
     savedWords: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Word' }],
     username: { type: String, required: false },
     firstName: { type: String, required: false },
+    seenWords: { type: [Schema.Types.ObjectId], default: [] },
+    seenTexts: { type: [Schema.Types.ObjectId], default: [] },
+    seenTests: { type: [Schema.Types.ObjectId], default: [] },
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
