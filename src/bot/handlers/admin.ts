@@ -1,344 +1,347 @@
-import { Context, NextFunction } from 'grammy';
+import { Context, InlineKeyboard, NextFunction } from 'grammy';
 import { config } from '../../config';
 import { createAdminMenu } from '../keyboards/admin';
 import { createMainMenu } from '../keyboards/main';
 import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
-import { Text } from '../../models/Text'; // Імпортуємо твою точну модель тексту
+import { Text } from '../../models/Text';
 import { User } from '../../models/User';
 
-// Інструкція для команди /admin
-export const handleAdminCommand = async (ctx: Context) => {
-    const userId = ctx.from?.id;
+// ─── Константи ───────────────────────────────────────────────────────────────
 
-    if (userId !== config.ADMIN_ID) {
-        return;
-    }
+const ALLOWED_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+type Level = typeof ALLOWED_LEVELS[number];
 
-    await ctx.reply('👨‍💻 *Ласкаво просимо до Адмін-панелі!*\n\nОберіть дію на клавіатурі знизу.', {
-        parse_mode: 'Markdown',
-        reply_markup: createAdminMenu()
-    });
-};
+const PAGE_SIZE = 20; // Telegram ліміт ~4096 символів — 20 юзерів безпечно
 
-// Вихід з адмінки
-export const handleExitAdmin = async (ctx: Context) => {
-    await ctx.reply('🚪 Ви вийшли з режиму адміністратора.', {
-        reply_markup: createMainMenu()
-    });
-};
-
-// Інструкція для кнопки "Додати слово"
-export const handleAddWordPrompt = async (ctx: Context) => {
-    if (ctx.from?.id !== config.ADMIN_ID) return;
-
-    const instruction = `📝 *Шаблон для додавання слова:*\n\n` +
-        `\`word: A2 | Challenge | Виклик | Челендж\``;
-
-    await ctx.reply(instruction, { parse_mode: 'Markdown' });
-};
-
-// Інструкція для кнопки "Додати тест"
-export const handleAddTestPrompt = async (ctx: Context) => {
-    if (ctx.from?.id !== config.ADMIN_ID) return;
-
-    const instruction = `🎯 *Шаблон для додавання міні-тесту:*\n\n` +
-        `\`test: A1 | Як буде "вода"? | school, water, window, bread | water\``;
-
-    await ctx.reply(instruction, { parse_mode: 'Markdown' });
-};
-
-// Інструкція для кнопки "Додати text"
-export const handleAddTextPrompt = async (ctx: Context) => {
-    if (ctx.from?.id !== config.ADMIN_ID) return;
-
-    const instruction = `📖 *Шаблон для додавання тексту для перекладу:*\n\n` +
-        `Скопіюйте текст нижче, замініть дані на свої та надішліть боту:\n\n` +
-        `\`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.\``;
-
-    await ctx.reply(instruction, { parse_mode: 'Markdown' });
-};
-
-// Головний обробник тексту адмінки (слова + тести + тексти)
-export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<void>) => {
-    if (ctx.from?.id !== config.ADMIN_ID) {
-        return await next();
-    }
-
-    const textData = ctx.message?.text;
-    if (!textData) return await next();
-
-    // 1. ОБРОБКА ДОДАВАННЯ СЛОВА
-    if (textData.startsWith('word:')) {
-        try {
-            const rawData = textData.replace('word:', '').trim();
-            const parts = rawData.split('|').map(item => item.trim());
-
-            if (parts.length < 4) {
-                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Потрібно 4 блоки розділені через `|`.', { parse_mode: 'Markdown' });
-            }
-
-            const inputLevel = parts[0];
-            const english = parts[1];
-            const ukrainian = parts[2];
-            const transcription = parts[3];
-
-            if (!inputLevel || !english || !ukrainian || !transcription) {
-                return ctx.reply('❌ *Помилка:* Одне або кілька полів пусті.', { parse_mode: 'Markdown' });
-            }
-
-            const allowedLevels = ['A1', 'A2', 'B1', 'B2'];
-            if (!allowedLevels.includes(inputLevel)) {
-                return ctx.reply(`❌ *Помилка:* Рівень *${inputLevel}* не підтримується.`, { parse_mode: 'Markdown' });
-            }
-
-            await Word.create({
-                level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
-                english,
-                ukrainian,
-                transcription
-            });
-
-            return ctx.reply(`✅ *Слово успішно додано!*`, { parse_mode: 'Markdown' });
-        } catch (error) {
-            console.error(error);
-            return ctx.reply('❌ Помилка при збереженні слова.');
-        }
-    }
-
-    // 2. ОБРОБКА ДОДАВАННЯ ТЕСТУ
-    if (textData.startsWith('test:')) {
-        try {
-            const rawData = textData.replace('test:', '').trim();
-            const parts = rawData.split('|').map(item => item.trim());
-
-            if (parts.length < 4) {
-                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Потрібно 4 блоки розділені через `|`.', { parse_mode: 'Markdown' });
-            }
-
-            const inputLevel = parts[0];
-            const question = parts[1];
-            const rawOptions = parts[2];
-            const correctAnswerText = parts[3];
-
-            if (!inputLevel || !question || !rawOptions || !correctAnswerText) {
-                return ctx.reply('❌ *Помилка:* Ви пропустили якесь із полів.', { parse_mode: 'Markdown' });
-            }
-
-            const options = rawOptions.split(',').map(item => item.trim());
-            if (options.length < 2) {
-                return ctx.reply('❌ *Помилка:* Тест повинен мати хоча б 2 варіанти відповідей.', { parse_mode: 'Markdown' });
-            }
-
-            const correctOptionIndex = options.indexOf(correctAnswerText);
-            if (correctOptionIndex === -1) {
-                // Виправлено: Прибрали некоректний parse_markup
-                return ctx.reply(`❌ *Помилка:* Правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів.`, { parse_mode: 'Markdown' });
-            }
-
-            const allowedLevels = ['A1', 'A2', 'B1', 'B2'];
-            if (!allowedLevels.includes(inputLevel)) {
-                return ctx.reply(`❌ *Помилка:* Рівень *${inputLevel}* не підтримується.`, { parse_mode: 'Markdown' });
-            }
-
-            await TestQuestion.create({
-                level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
-                question,
-                options,
-                correctOptionIndex
-            });
-
-            return ctx.reply(`✅ *Міні-тест успішно додано!*`, { parse_mode: 'Markdown' });
-        } catch (error) {
-            console.error(error);
-            return ctx.reply('❌ Помилка при збереженні тесту.');
-        }
-    }
-
-    // 3. ОБРОБКА ДОДАВАННЯ ТЕКСТУ
-    if (textData.startsWith('text:')) {
-        try {
-            const rawData = textData.replace('text:', '').trim();
-            const parts = rawData.split('|').map(item => item.trim());
-
-            if (parts.length < 3) {
-                return ctx.reply('❌ *Помилка:* Не всі поля заповнено. Потрібно 3 блоки розділені через `|` (рівень | англійська | переклад).', { parse_mode: 'Markdown' });
-            }
-
-            const inputLevel = parts[0];
-            const english = parts[1];
-            const ukrainian = parts[2];
-
-            if (!inputLevel || !english || !ukrainian) {
-                return ctx.reply('❌ *Помилка:* Ви пропустили якесь із полів.', { parse_mode: 'Markdown' });
-            }
-
-            const allowedLevels = ['A1', 'A2', 'B1', 'B2'];
-            if (!allowedLevels.includes(inputLevel)) {
-                return ctx.reply(`❌ *Помилка:* Рівень *${inputLevel}* не підтримується.`, { parse_mode: 'Markdown' });
-            }
-
-            // Зберігаємо в базу даних згідно з точними назвами властивостей твоєї моделі Text
-            await Text.create({
-                level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2',
-                englishText: english,               // Змінено на englishText
-                ukrainianTranslation: ukrainian     // Змінено на ukrainianTranslation
-            });
-
-            return ctx.reply(`✅ *Текст успішно додано!*\n\n📊 Рівень: *${inputLevel}*\n🇬🇧 Англійська: _${english}_\n🇺🇦 Переклад: _${ukrainian}_`, { parse_mode: 'Markdown' });
-        } catch (error) {
-            console.error('Помилка додавання тексту:', error);
-            return ctx.reply('❌ Відбулася помилка при збереженні тексту в базу даних.');
-        }
-    }
-
-    return await next();
-};
-export const handleAdminStats = async (ctx: Context) => {
-    if (ctx.from?.id !== config.ADMIN_ID) return;
-
-    try {
-        // Рахуємо користувачів у базі даних (тепер використовуємо просто User)
-        const totalUsers = await User.countDocuments();
-        const premiumUsers = await User.countDocuments({ isPremium: true });
-
-        const levels = ['A1', 'A2', 'B1', 'B2'] as const;
-
-        let statsMessage = `📊 *ДЕТАЛЬНА СТАТИСТИКА БАЗИ ДАНИХ*\n\n`;
-        statsMessage += `👥 Усього користувачів: *${totalUsers}*\n`;
-        statsMessage += `💎 З них з Premium: *${premiumUsers}*\n\n`;
-        statsMessage += `🗂 *Наповнення контентом за рівнями:*\n`;
-
-        // Збираємо статистику по базі даних
-        for (const lvl of levels) {
-            const wordsCount = await Word.countDocuments({ level: lvl });
-            const testsCount = await TestQuestion.countDocuments({ level: lvl });
-            const textsCount = await Text.countDocuments({ level: lvl });
-
-            statsMessage += `\n📈 *Рівень ${lvl}:*\n`;
-            statsMessage += `  ▫️ Слова/Фрази: *${wordsCount}*\n`;
-            statsMessage += `  ▫️ Міні-тести: *${testsCount}*\n`;
-            statsMessage += `  ▫️ Тексти для перекладу: *${textsCount}*\n`;
-        }
-
-        await ctx.reply(statsMessage, { parse_mode: 'Markdown' });
-    } catch (error) {
-        console.error('Помилка збору адмін-статистики:', error);
-        await ctx.reply('❌ Не вдалося завантажити статистику бази даних.');
-    }
-};
-
-export const handleAdminUsers = async (ctx: Context) => {
-    // Перевірка на адміна
-    if (ctx.from?.id !== config.ADMIN_ID) return;
-
-    try {
-        const users = await User.find({});
-        const totalUsers = users.length;
-
-        if (totalUsers === 0) {
-            return ctx.reply('📭 У боті поки немає зареєстрованих користувачів.');
-        }
-
-        // Використовуємо HTML-теги <b> для жирного тексту
-        let message = `👥 <b>Статистика користувачів</b>\n\n`;
-        message += `Всього: <b>${totalUsers}</b>\n\n`;
-
-        const limit = Math.min(totalUsers, 50);
-        message += `📋 <b>Список (перші ${limit}):</b>\n`;
-
-        for (let i = 0; i < limit; i++) {
-            const u = users[i];
-            const level = u.level ? u.level : 'Не обрано';
-
-            // Якщо в імені випадково є символи < або >, екрануємо їх, щоб HTML не зламався
-            let name = u.firstName ? u.firstName.replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Анонім';
-            const username = u.username ? ` (@${u.username})` : '';
-
-            // Використовуємо <code> для ID, щоб його можна було легко копіювати
-            message += `${i + 1}. <b>${name}</b>${username} | ID: <code>${u.telegramId}</code> | Рівень: ${level}\n`;
-        }
-
-        if (totalUsers > 50) {
-            message += `\n...та ще ${totalUsers - 50} користувачів.`;
-        }
-
-        // Змінюємо parse_mode на 'HTML'
-        await ctx.reply(message, { parse_mode: 'HTML' });
-    } catch (error) {
-        console.error('Помилка при отриманні користувачів:', error);
-        await ctx.reply('❌ Помилка при завантаженні списку.');
-    }
-};
+// ─── Стан для розсилки ───────────────────────────────────────────────────────
 
 export const adminState = new Map<number, string>();
 
-// Функція-обробник натискання кнопки "📢 Розсилка"
-export const handleBroadcastStart = async (ctx: Context) => {
-    // if (ctx.from?.id !== config.ADMIN_ID) return; // розкоментуй, якщо в тебе є перевірка на адміна
+// ─── Хелпер: екранування HTML ────────────────────────────────────────────────
 
-    const adminId = ctx.from!.id;
-    adminState.set(adminId, 'waiting_for_broadcast');
+const escapeHtml = (text: string): string =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
-    await ctx.reply(
-        '📢 <b>Режим розсилки</b>\n\n' +
-        'Відправ мені повідомлення, яке ти хочеш надіслати всім користувачам. Це може бути текст, фото або навіть відео!\n\n' +
-        '<i>(Для скасування напиши /cancel)</i>', 
-        { parse_mode: 'HTML' }
-    );
+// ─── Хелпер: перевірка адміна ────────────────────────────────────────────────
+
+const isAdmin = (ctx: Context): boolean => ctx.from?.id === config.ADMIN_ID;
+
+// ─── Хелпер: побудова сторінки списку юзерів ─────────────────────────────────
+
+const buildUsersPage = (
+  users: any[],
+  page: number,
+): { text: string; keyboard: InlineKeyboard } => {
+  const totalUsers = users.length;
+  const totalPages = Math.ceil(totalUsers / PAGE_SIZE);
+  const start = page * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, totalUsers);
+
+  let text = `👥 <b>Список користувачів</b>\n`;
+  text += `Всього: <b>${totalUsers}</b> | Сторінка ${page + 1}/${totalPages}\n\n`;
+
+  for (let i = start; i < end; i++) {
+    const u = users[i];
+    const level = u.level ?? 'Не обрано';
+    const name = escapeHtml(u.firstName ?? 'Анонім');
+    const username = u.username ? ` (@${u.username})` : '';
+    text += `${i + 1}. <b>${name}</b>${username} | <code>${u.telegramId}</code> | ${level}\n`;
+  }
+
+  const keyboard = new InlineKeyboard();
+  if (page > 0) keyboard.text('⬅️', `admin_users_${page - 1}`);
+  if (page < totalPages - 1) keyboard.text('➡️', `admin_users_${page + 1}`);
+
+  return { text, keyboard };
 };
 
-// Функція-перехоплювач повідомлення для розсилки
-export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
-    const adminId = ctx.from?.id;
-    if (!adminId) return next();
+// ─── /admin команда ───────────────────────────────────────────────────────────
 
-    // Перевіряємо, чи знаходиться адмін у стані створення розсилки
-    const state = adminState.get(adminId);
-    if (state === 'waiting_for_broadcast') {
-        
-        // Скасування розсилки
-        if (ctx.message?.text === '/cancel') {
-            adminState.delete(adminId);
-            return ctx.reply('🚫 Розсилку скасовано.');
-        }
+export const handleAdminCommand = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
 
-        // Починаємо розсилку
-        adminState.delete(adminId);
-        await ctx.reply('⏳ Починаю розсилку... Це може зайняти трохи часу.');
+  await ctx.reply(
+    '👨‍💻 *Ласкаво просимо до Адмін-панелі!*\n\nОберіть дію на клавіатурі знизу.',
+    { parse_mode: 'Markdown', reply_markup: createAdminMenu() },
+  );
+};
 
-        try {
-            const users = await User.find({});
-            let successCount = 0;
-            let failCount = 0;
+// ─── Вихід з адмінки ─────────────────────────────────────────────────────────
 
-            for (const user of users) {
-                try {
-                    // Використовуємо copyMessage, щоб можна було слати фото/відео з текстом
-                    await ctx.copyMessage(user.telegramId);
-                    successCount++;
-                    
-                    // Пауза 50мс для уникнення лімітів Telegram (не більше 30 повідомлень на секунду)
-                    await new Promise(res => setTimeout(res, 50)); 
-                } catch (e) {
-                    // Якщо юзер заблокував бота, буде помилка
-                    failCount++;
-                }
-            }
+export const handleExitAdmin = async (ctx: Context) => {
+  await ctx.reply('🚪 Ви вийшли з режиму адміністратора.', {
+    reply_markup: createMainMenu(),
+  });
+};
 
-            await ctx.reply(
-                `✅ <b>Розсилка завершена!</b>\n\n` +
-                `Успішно доставлено: <b>${successCount}</b>\n` +
-                `Заблокували бота: <b>${failCount}</b>`, 
-                { parse_mode: 'HTML' }
-            );
-        } catch (error) {
-            console.error('Помилка масової розсилки:', error);
-            await ctx.reply('❌ Відбулася критична помилка під час розсилки.');
-        }
-        return; // Завершуємо обробку, щоб повідомлення не пішло в інші обробники
+// ─── Підказки для додавання контенту ─────────────────────────────────────────
+
+export const handleAddWordPrompt = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.reply(
+    '📝 *Шаблон для додавання слова:*\n\n`word: A2 | Challenge | Виклик | Челендж`',
+    { parse_mode: 'Markdown' },
+  );
+};
+
+export const handleAddTestPrompt = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.reply(
+    '🎯 *Шаблон для додавання міні-тесту:*\n\n`test: A1 | Як буде "вода"? | school, water, window, bread | water`',
+    { parse_mode: 'Markdown' },
+  );
+};
+
+export const handleAddTextPrompt = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.reply(
+    '📖 *Шаблон для додавання тексту:*\n\n`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.`',
+    { parse_mode: 'Markdown' },
+  );
+};
+
+// ─── Головний обробник вхідного тексту адмінки ────────────────────────────────
+
+export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<void>) => {
+  if (!isAdmin(ctx)) return next();
+
+  const textData = ctx.message?.text;
+  if (!textData) return next();
+
+  // 1. СЛОВО
+  if (textData.startsWith('word:')) {
+    try {
+      const parts = textData.replace('word:', '').trim().split('|').map((s) => s.trim());
+      if (parts.length < 4) {
+        return ctx.reply('❌ Потрібно 4 поля: `word: рівень | англійське | українське | транскрипція`', {
+          parse_mode: 'Markdown',
+        });
+      }
+      const [inputLevel, english, ukrainian, transcription] = parts;
+      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
+        return ctx.reply(`❌ Невідомий рівень: *${inputLevel}*. Дозволені: ${ALLOWED_LEVELS.join(', ')}`, {
+          parse_mode: 'Markdown',
+        });
+      }
+      await Word.create({ level: inputLevel as Level, english, ukrainian, transcription });
+      return ctx.reply('✅ *Слово успішно додано!*', { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Помилка додавання слова:', error);
+      return ctx.reply('❌ Помилка при збереженні слова.');
+    }
+  }
+
+  // 2. ТЕСТ
+  if (textData.startsWith('test:')) {
+    try {
+      const parts = textData.replace('test:', '').trim().split('|').map((s) => s.trim());
+      if (parts.length < 4) {
+        return ctx.reply('❌ Потрібно 4 поля: `test: рівень | питання | варіанти через кому | правильна відповідь`', {
+          parse_mode: 'Markdown',
+        });
+      }
+      const [inputLevel, question, rawOptions, correctAnswerText] = parts;
+      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
+        return ctx.reply(`❌ Невідомий рівень: *${inputLevel}*`, { parse_mode: 'Markdown' });
+      }
+      const options = rawOptions.split(',').map((s) => s.trim());
+      if (options.length < 2) {
+        return ctx.reply('❌ Потрібно хоча б 2 варіанти відповідей.', { parse_mode: 'Markdown' });
+      }
+      const correctOptionIndex = options.indexOf(correctAnswerText);
+      if (correctOptionIndex === -1) {
+        return ctx.reply(
+          `❌ Правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів: \`${options.join(', ')}\``,
+          { parse_mode: 'Markdown' },
+        );
+      }
+      await TestQuestion.create({ level: inputLevel as Level, question, options, correctOptionIndex });
+      return ctx.reply('✅ *Міні-тест успішно додано!*', { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Помилка додавання тесту:', error);
+      return ctx.reply('❌ Помилка при збереженні тесту.');
+    }
+  }
+
+  // 3. ТЕКСТ
+  if (textData.startsWith('text:')) {
+    try {
+      const parts = textData.replace('text:', '').trim().split('|').map((s) => s.trim());
+      if (parts.length < 3) {
+        return ctx.reply('❌ Потрібно 3 поля: `text: рівень | англійський текст | переклад`', {
+          parse_mode: 'Markdown',
+        });
+      }
+      const [inputLevel, english, ukrainian] = parts;
+      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
+        return ctx.reply(`❌ Невідомий рівень: *${inputLevel}*`, { parse_mode: 'Markdown' });
+      }
+      await Text.create({
+        level: inputLevel as Level,
+        englishText: english,
+        ukrainianTranslation: ukrainian,
+      });
+      return ctx.reply(
+        `✅ *Текст успішно додано!*\n\n📊 Рівень: *${inputLevel}*\n🇬🇧 _${english}_\n🇺🇦 _${ukrainian}_`,
+        { parse_mode: 'Markdown' },
+      );
+    } catch (error) {
+      console.error('Помилка додавання тексту:', error);
+      return ctx.reply('❌ Помилка при збереженні тексту.');
+    }
+  }
+
+  return next();
+};
+
+// ─── Статистика БД ────────────────────────────────────────────────────────────
+
+export const handleAdminStats = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+
+  try {
+    // Всі countDocuments паралельно — швидше ніж послідовно
+    const [totalUsers, premiumUsers] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ isPremium: true }),
+    ]);
+
+    const levelStats = await Promise.all(
+      ALLOWED_LEVELS.map(async (lvl) => {
+        const [words, tests, texts] = await Promise.all([
+          Word.countDocuments({ level: lvl }),
+          TestQuestion.countDocuments({ level: lvl }),
+          Text.countDocuments({ level: lvl }),
+        ]);
+        return { lvl, words, tests, texts };
+      }),
+    );
+
+    let message = `📊 *ДЕТАЛЬНА СТАТИСТИКА БАЗИ ДАНИХ*\n\n`;
+    message += `👥 Усього користувачів: *${totalUsers}*\n`;
+    message += `💎 З них з Premium: *${premiumUsers}*\n\n`;
+    message += `🗂 *Наповнення контентом за рівнями:*\n`;
+
+    for (const { lvl, words, tests, texts } of levelStats) {
+      message += `\n📈 *Рівень ${lvl}:*\n`;
+      message += `  ▫️ Слова/Фрази: *${words}*\n`;
+      message += `  ▫️ Міні-тести: *${tests}*\n`;
+      message += `  ▫️ Тексти: *${texts}*\n`;
     }
 
-    // Якщо це звичайне повідомлення, передаємо його далі
-    return next();
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Помилка збору статистики:', error);
+    await ctx.reply('❌ Не вдалося завантажити статистику.');
+  }
+};
+
+// ─── Список юзерів (перша сторінка) ──────────────────────────────────────────
+
+export const handleAdminUsers = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+
+  try {
+    const users = await User.find({}).lean();
+
+    if (users.length === 0) {
+      return ctx.reply('📭 У боті поки немає зареєстрованих користувачів.');
+    }
+
+    const { text, keyboard } = buildUsersPage(users, 0);
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+  } catch (error) {
+    console.error('Помилка при отриманні користувачів:', error);
+    await ctx.reply('❌ Помилка при завантаженні списку.');
+  }
+};
+
+// ─── Навігація між сторінками юзерів ─────────────────────────────────────────
+// Реєструй в app.ts: bot.callbackQuery(/^admin_users_\d+$/, handleAdminUsersPagination)
+
+export const handleAdminUsersPagination = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+
+  await ctx.answerCallbackQuery().catch(() => {});
+
+  const page = parseInt(ctx.callbackQuery?.data?.split('_')[2] ?? '', 10);
+  if (isNaN(page)) return;
+
+  try {
+    const users = await User.find({}).lean();
+    const { text, keyboard } = buildUsersPage(users, page);
+
+    await ctx
+      .editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard })
+      .catch((err: any) => {
+        if (!err?.description?.includes('message is not modified')) {
+          console.error('Помилка пагінації юзерів:', err);
+        }
+      });
+  } catch (error) {
+    console.error('Помилка навігації по юзерах:', error);
+  }
+};
+
+// ─── Розсилка ─────────────────────────────────────────────────────────────────
+
+export const handleBroadcastStart = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+
+  adminState.set(ctx.from!.id, 'waiting_for_broadcast');
+
+  await ctx.reply(
+    '📢 <b>Режим розсилки</b>\n\n' +
+    'Відправ повідомлення для розсилки (текст, фото, відео).\n\n' +
+    '<i>Для скасування напиши /cancel</i>',
+    { parse_mode: 'HTML' },
+  );
+};
+
+export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
+  const adminId = ctx.from?.id;
+  if (!adminId) return next();
+
+  if (adminState.get(adminId) !== 'waiting_for_broadcast') return next();
+
+  if (ctx.message?.text === '/cancel') {
+    adminState.delete(adminId);
+    return ctx.reply('🚫 Розсилку скасовано.');
+  }
+
+  adminState.delete(adminId);
+  await ctx.reply('⏳ Починаю розсилку...');
+
+  try {
+    const users = await User.find({}).lean();
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of users) {
+      try {
+        await ctx.copyMessage(user.telegramId);
+        successCount++;
+        // Telegram дозволяє ~30 повідомлень/сек — пауза для безпеки
+        await new Promise((res) => setTimeout(res, 50));
+      } catch {
+        failCount++;
+      }
+    }
+
+    await ctx.reply(
+      `✅ <b>Розсилка завершена!</b>\n\n` +
+      `Успішно: <b>${successCount}</b>\n` +
+      `Заблокували бота: <b>${failCount}</b>`,
+      { parse_mode: 'HTML' },
+    );
+  } catch (error) {
+    console.error('Помилка розсилки:', error);
+    await ctx.reply('❌ Критична помилка під час розсилки.');
+  }
 };

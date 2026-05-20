@@ -8,38 +8,34 @@ export const handleWords = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
+  // ✅ ПРАВИЛО №1: answerCallbackQuery — ЗАВЖДИ ПЕРШИМ, до будь-яких БД запитів.
+  // Telegram дає лише 10 секунд. БД + delete + aggregate можуть зайняти більше.
+  if (ctx.callbackQuery) {
+    await ctx.answerCallbackQuery().catch(() => {});
+  }
+
   try {
     const user = await User.findOne({ telegramId });
 
     if (!user || !user.level) {
-      if (ctx.callbackQuery) await ctx.answerCallbackQuery();
-      return ctx.reply(
-        'Будь ласка, спочатку обери свій рівень за допомогою команди /start',
-      );
+      return ctx.reply('Будь ласка, спочатку обери свій рівень за допомогою команди /start');
     }
 
-    // 🧹 Видаляємо попереднє аудіо одним запитом, без зайвого user.save()
+    // 🧹 Видаляємо попереднє аудіо (після answerCallbackQuery — не критично по часу)
     if (user.lastAudioMessageId && ctx.chat?.id) {
       await ctx.api
         .deleteMessage(ctx.chat.id, user.lastAudioMessageId)
-        .catch(() => {
-          // Повідомлення могло вже бути видалено — ігноруємо
-        });
+        .catch(() => {});
 
-      // Очищуємо одразу в БД, не через user.save() щоб уникнути конфліктів
       await User.findByIdAndUpdate(user._id, {
         $set: { lastAudioMessageId: null },
       });
     }
 
-    // ✅ Передаємо весь об'єкт user, а не user.level
     const words = await getRandomWords(user, 1);
 
     if (!words || words.length === 0) {
-      if (ctx.callbackQuery) await ctx.answerCallbackQuery();
-      return ctx.reply(
-        'На жаль, для твого рівня поки немає слів у базі 😔',
-      );
+      return ctx.reply('На жаль, для твого рівня поки немає слів у базі 😔');
     }
 
     const word = words[0];
@@ -60,8 +56,12 @@ export const handleWords = async (ctx: Context) => {
       await ctx.editMessageText(message, {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
+      }).catch(async (error: any) => {
+        // Якщо текст не змінився — просто показуємо тост, не падаємо
+        if (error?.description?.includes('message is not modified')) {
+          await ctx.answerCallbackQuery('Випало те ж саме слово! Тисни ще раз 😅').catch(() => {});
+        }
       });
-      await ctx.answerCallbackQuery();
     } else {
       await ctx.reply(message, {
         parse_mode: 'Markdown',
@@ -70,30 +70,22 @@ export const handleWords = async (ctx: Context) => {
     }
 
     await updateUserProgress(telegramId, 'word', word._id.toString());
-  } catch (error: any) {
-    // Telegram кидає цю помилку якщо текст повідомлення не змінився
-    if (error?.description?.includes('message is not modified')) {
-      if (ctx.callbackQuery) {
-        await ctx.answerCallbackQuery(
-          'Випало те ж саме слово! Тисни ще раз 😅',
-        );
-      }
-      return;
-    }
 
+  } catch (error: any) {
     console.error('Помилка при видачі слів:', error);
-    if (ctx.callbackQuery) await ctx.answerCallbackQuery();
-    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.');
+    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => {});
   }
 };
 
-// 🔊 Обробник кнопки озвучки — видаляє попереднє аудіо перед надсиланням нового
+// 🔊 Обробник кнопки озвучки
 export const handleWordAudio = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   const callbackData = ctx.callbackQuery?.data;
   if (!callbackData || !telegramId) return;
 
-  // callbackData має формат "audio_hello" → беремо все після першого "_"
+  // ✅ answerCallbackQuery — одразу, до будь-яких запитів
+  await ctx.answerCallbackQuery().catch(() => {});
+
   const wordToPronounce = callbackData.substring('audio_'.length);
 
   try {
@@ -113,19 +105,14 @@ export const handleWordAudio = async (ctx: Context) => {
       parse_mode: 'Markdown',
     });
 
-    // Зберігаємо ID нового аудіо-повідомлення
     if (user) {
       await User.findByIdAndUpdate(user._id, {
         $set: { lastAudioMessageId: audioMessage.message_id },
       });
     }
 
-    await ctx.answerCallbackQuery();
   } catch (error) {
     console.error('Помилка при надсиланні аудіо:', error);
-    await ctx.answerCallbackQuery({
-      text: '❌ Не вдалося завантажити озвучку',
-      show_alert: true,
-    });
+    // answerCallbackQuery вже викликано вище, тут лише логуємо
   }
 };
