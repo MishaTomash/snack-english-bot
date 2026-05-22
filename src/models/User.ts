@@ -7,18 +7,21 @@ export interface IUser extends Document {
     lastActive?: Date;
     wordsLearned?: number;
     testsPassed?: number;
-    xp?: number;                      // ← ДОДАНО ПОЛЕ XP (Досвід)
+    xp: number;
     // Freemium 💎
     isPremium: boolean;
-    premiumExpiresAt?: Date;          // aliases: premiumUntil
+    premiumExpiresAt?: Date;
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
     // Carry-over невивчених слів
     carriedOverWords: number;
     // Нагадування
-    reminderTime?: string;            // формат "HH:MM", напр. "10:00"
+    reminderTime?: string;
     lastActivityDate?: Date;
-    // Чищення аудіо-спаму 🧹
+    // Анти-накрутка тестів 🛡️
+    testXpEarnedToday: number;
+    lastTestXpDate?: Date;
+    // Чищення аудіо-спаму
     lastAudioMessageId?: number | null;
     learnedWordIds?: string[];
     savedWords: mongoose.Types.ObjectId[];
@@ -37,17 +40,16 @@ const UserSchema: Schema = new Schema({
     lastActive: { type: Date },
     wordsLearned: { type: Number, default: 0 },
     testsPassed: { type: Number, default: 0 },
-    xp: { type: Number, default: 0 }, // ← ДОДАНО ПОЛЕ XP (за замовчуванням 0)
-    // Freemium
+    xp: { type: Number, default: 0 },
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date },
     wordsLearnedToday: { type: Number, default: 0 },
     lastWordLearnDate: { type: Date },
-    // Carry-over: скільки невикористаних слотів перенесено з попереднього дня (max 3)
     carriedOverWords: { type: Number, default: 0 },
-    // Нагадування (рядок "HH:MM" в UTC або локальному tz користувача)
     reminderTime: { type: String },
     lastActivityDate: { type: Date },
+    testXpEarnedToday: { type: Number, default: 0 },
+    lastTestXpDate: { type: Date },
     lastAudioMessageId: { type: Number, default: null },
     learnedWordIds: { type: [String], default: [] },
     savedWords: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Word' }],

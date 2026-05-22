@@ -44,6 +44,7 @@ import {
   handleNextRepeatTest,
 } from './handlers/tests';
 import { handlePremiumPaymentSuccess } from './handlers/premium';
+import { handleTopMenu } from './handlers/rating';
 
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
@@ -116,6 +117,10 @@ bot.callbackQuery(/^adm_test_edit_/, handleAdminTestEdit);
 bot.callbackQuery(/^adm_test_del_(?!confirm)/, handleAdminTestDel);
 bot.callbackQuery(/^adm_test_delconfirm_/, handleAdminTestDelConfirm);
 
+
+bot.callbackQuery('show_top', handleTopMenu); // <-- ДОДАЙ ЦЕ
+bot.callbackQuery('show_profile_btn', showProfile); // <-- ДОДАЙ ЦЕ
+
 // ─── Платежі ─────────────────────────────────────────────────────────────────
 bot.on('pre_checkout_query', handlePreCheckout);
 bot.on('message:successful_payment', async (ctx) => {
@@ -156,8 +161,9 @@ bot.hears('🔄 Оновити меню', handleForceMenuUpdate);
 bot.hears('📚 Вчити слова', checkWordLimits, handleWords);
 bot.hears('📝 Перевірка слів', sendLearnedWordsTest);
 bot.hears('🎯 Міні-тести', sendRandomTest);
-bot.hears('📖 Тексти', sendRandomText);
+// bot.hears('📖 Тексти', sendRandomText);
 bot.hears('💾 Словничок', handleSavedWords);
 bot.hears('👤 Профіль', showProfile);
 bot.hears('⚙️ Налаштування', showSettings);
 bot.hears('🎓 Курси', handleCoursesList);
+bot.hears('🏆 Топ', handleTopMenu); // <-- ДОДАЙ ЦЕ
