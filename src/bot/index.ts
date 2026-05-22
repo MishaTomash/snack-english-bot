@@ -4,7 +4,6 @@ import { handleStart } from './handlers/start';
 import { handleLevelSelection } from './handlers/level';
 import { handleWords, handleWordAudio } from './handlers/words';
 import { sendRandomText, handleShowTranslation } from './handlers/texts';
-import { sendRandomTest, handleTestAnswer } from './handlers/tests';
 import { trackActivity } from './middlewares/activity';
 import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
@@ -34,6 +33,16 @@ import {
   handleAdminExampleDelConfirm, handleAdminTestsList, handleAdminTestAdd, handleAdminTestEdit,
   handleAdminTestDel, handleAdminTestDelConfirm, handleAdminCourseTextInbound, handleForceMenuUpdate
 } from './handlers/adminCourses';
+import { handleSetReminder, handleReminderTomorrow } from './handlers/words';
+// import { sendWordTest } from './handlers/tests';
+import {
+  sendRandomTest,
+  sendLearnedWordsTest,
+  handleTestAnswer,
+  handleLearnedTestRepeat,
+  handleNextRepeatTest,
+} from './handlers/tests';
+import { handlePremiumPaymentSuccess } from './handlers/premium';
 
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
@@ -53,17 +62,27 @@ bot.command('courses', handleCoursesList);
 bot.callbackQuery(/^stars_/, handleStarsInvoice);
 bot.callbackQuery(/^level_/, handleLevelSelection);
 bot.callbackQuery(/^trans_/, handleShowTranslation);
-bot.callbackQuery(/^test_/, handleTestAnswer);
+// bot.callbackQuery(/^test_/, handleTestAnswer);
 bot.callbackQuery(/^audio_/, handleWordAudio);
 bot.callbackQuery(/^next_saved_/, handleNextSavedWord);
 bot.callbackQuery(/^del_saved_/, handleDeleteSavedWord);
 bot.callbackQuery(/^save_word_/, handleSaveWord);
 bot.callbackQuery(/^admin_users_\d+$/, handleAdminUsersPagination);
 bot.callbackQuery('next_text', sendRandomText);
-bot.callbackQuery('next_test', sendRandomTest);
 bot.callbackQuery('next_word', checkWordLimits, handleWords);
 bot.callbackQuery('buy_premium', sendPremiumOffer);
 bot.callbackQuery('change_level', handleChangeLevelClick);
+bot.callbackQuery(/^set_reminder_/, handleSetReminder);
+bot.callbackQuery(/^answer_/,          handleTestAnswer);
+
+
+bot.callbackQuery('reminder_tomorrow', handleReminderTomorrow);
+
+bot.callbackQuery('next_test',         sendRandomTest);
+bot.callbackQuery('next_learned_test', sendLearnedWordsTest);
+bot.callbackQuery('next_repeat_test',  handleNextRepeatTest);
+bot.callbackQuery('learned_test_repeat', handleLearnedTestRepeat);
+ 
 
 // ─── Callback: курси (користувач) ─────────────────────────────────────────────
 bot.callbackQuery('courses_list', handleCoursesList);
@@ -101,13 +120,21 @@ bot.callbackQuery(/^adm_test_edit_/, handleAdminTestEdit);
 bot.callbackQuery(/^adm_test_del_(?!confirm)/, handleAdminTestDel);
 bot.callbackQuery(/^adm_test_delconfirm_/, handleAdminTestDelConfirm);
 
+
+// ─── Платежі ─────────────────────────────────────────────────────────────────
 // ─── Платежі ─────────────────────────────────────────────────────────────────
 bot.on('pre_checkout_query', handlePreCheckout);
 bot.on('message:successful_payment', async (ctx) => {
   const payload = ctx.message?.successful_payment?.invoice_payload ?? '';
+  
   if (payload.startsWith('course_')) {
+    // 1. Якщо купили курс
     await handleCoursePaymentSuccess(ctx);
+  } else if (payload === 'premium_subscription') {
+    // 2. Якщо купили Преміум
+    await handlePremiumPaymentSuccess(ctx); 
   } else {
+    // 3. Якщо це донат (Підтримка бота)
     await handleSuccessfulPayment(ctx);
   }
 });
@@ -123,7 +150,6 @@ bot.on('message', handleAdminMessages);
 // ─── Кнопки головного меню ───────────────────────────────────────────────────
 bot.hears('📚 Нові слова', checkWordLimits, handleWords);
 bot.hears('📝 Тексти для перекладу', sendRandomText);
-bot.hears('🎯 Міні-тести', sendRandomTest);
 bot.hears('🎓 Курси', handleCoursesList);
 bot.hears('👤 Мій профіль', showProfile);
 bot.hears('💎 Premium', sendPremiumOffer);
@@ -139,3 +165,5 @@ bot.hears('👥 Користувачі', handleAdminUsers);
 bot.hears('📢 Розсилка', handleBroadcastStart);
 bot.hears('💖 Підтримати', handleSupportMenu);
 bot.hears('🔄 Оновити меню', handleForceMenuUpdate);
+bot.hears('🎯 Міні-тести',     sendRandomTest);
+bot.hears('🧪 Тести до слів',  sendLearnedWordsTest);

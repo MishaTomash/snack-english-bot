@@ -4,12 +4,24 @@ import { getRandomWords } from '../../services/wordService';
 import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
 
+// ─── Константи ────────────────────────────────────────────────────────────────
+
+const DAILY_WORD_LIMIT = 5;
+
+// ─── Хелпер: чи та сама UTC-дата ─────────────────────────────────────────────
+
+const isSameUTCDay = (a: Date, b: Date): boolean =>
+  a.getUTCFullYear() === b.getUTCFullYear() &&
+  a.getUTCMonth()    === b.getUTCMonth()    &&
+  a.getUTCDate()     === b.getUTCDate();
+
+// ─── Видача слова ─────────────────────────────────────────────────────────────
+
 export const handleWords = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  // ✅ ПРАВИЛО №1: answerCallbackQuery — ЗАВЖДИ ПЕРШИМ, до будь-яких БД запитів.
-  // Telegram дає лише 10 секунд. БД + delete + aggregate можуть зайняти більше.
+  // ✅ ПРАВИЛО №1: answerCallbackQuery — ЗАВЖДИ ПЕРШИМ
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery().catch(() => {});
   }
@@ -21,15 +33,60 @@ export const handleWords = async (ctx: Context) => {
       return ctx.reply('Будь ласка, спочатку обери свій рівень за допомогою команди /start');
     }
 
-    // 🧹 Видаляємо попереднє аудіо (після answerCallbackQuery — не критично по часу)
-    if (user.lastAudioMessageId && ctx.chat?.id) {
-      await ctx.api
-        .deleteMessage(ctx.chat.id, user.lastAudioMessageId)
-        .catch(() => {});
+    const now = new Date();
+
+    // ─── Скидання лічильника при новому дні ──────────────────────────────────
+    // Якщо lastWordLearnDate відсутня АБО це інший UTC-день → скидаємо
+    const lastLearnDate = user.lastWordLearnDate;
+    const isNewDay = !lastLearnDate || !isSameUTCDay(lastLearnDate, now);
+
+    let wordsLearnedToday = user.wordsLearnedToday ?? 0;
+    let carriedOverWords  = user.carriedOverWords  ?? 0;
+
+    if (isNewDay) {
+      // carry-over: скільки невикористаних слотів з учора (max 3)
+      const unused = DAILY_WORD_LIMIT - wordsLearnedToday;
+      carriedOverWords = Math.min(Math.max(unused, 0), 3);
+      wordsLearnedToday = 0;
 
       await User.findByIdAndUpdate(user._id, {
-        $set: { lastAudioMessageId: null },
+        $set: {
+          wordsLearnedToday: 0,
+          carriedOverWords,
+        },
       });
+    }
+
+    // ─── Перевірка денного ліміту ─────────────────────────────────────────────
+    const effectiveLimit = DAILY_WORD_LIMIT + carriedOverWords;
+
+    if (!user.isPremium && wordsLearnedToday >= effectiveLimit) {
+      const limitMsg =
+        `⏰ *Слова на сьогодні закінчились!*\n\n` +
+        `Ти опрацював ${wordsLearnedToday} слів — відмінно! 🎉\n` +
+        `Нові слова будуть доступні завтра.\n\n` +
+        `💎 _Або підключи Premium для безлімітного навчання._`;
+
+      const limitKeyboard = new InlineKeyboard()
+        .text('🔔 Нагадати завтра', 'reminder_tomorrow')
+        .row()
+        .text('💎 Отримати Premium', 'buy_premium');
+
+      if (ctx.callbackQuery) {
+        return ctx.editMessageText(limitMsg, {
+          parse_mode: 'Markdown',
+          reply_markup: limitKeyboard,
+        }).catch(() =>
+          ctx.reply(limitMsg, { parse_mode: 'Markdown', reply_markup: limitKeyboard }),
+        );
+      }
+      return ctx.reply(limitMsg, { parse_mode: 'Markdown', reply_markup: limitKeyboard });
+    }
+
+    // ─── Видалення попереднього аудіо ─────────────────────────────────────────
+    if (user.lastAudioMessageId && ctx.chat?.id) {
+      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => {});
+      await User.findByIdAndUpdate(user._id, { $set: { lastAudioMessageId: null } });
     }
 
     const words = await getRandomWords(user, 1);
@@ -48,8 +105,8 @@ export const handleWords = async (ctx: Context) => {
 
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)
-      .row()
       .text('💾 Зберегти', `save_word_${word._id}`)
+      .row()
       .text('➡️ Наступне слово', 'next_word');
 
     if (ctx.callbackQuery) {
@@ -57,19 +114,24 @@ export const handleWords = async (ctx: Context) => {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
       }).catch(async (error: any) => {
-        // Якщо текст не змінився — просто показуємо тост, не падаємо
         if (error?.description?.includes('message is not modified')) {
           await ctx.answerCallbackQuery('Випало те ж саме слово! Тисни ще раз 😅').catch(() => {});
         }
       });
     } else {
-      await ctx.reply(message, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-      });
+      await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
     }
 
+    // ─── Оновлення лічильника ─────────────────────────────────────────────────
+    // lastWordLearnDate — дата останнього слова (використовується для скидання)
     await updateUserProgress(telegramId, 'word', word._id.toString());
+    await User.findByIdAndUpdate(user._id, {
+      $inc: { wordsLearnedToday: 1 },
+      $set: {
+        lastWordLearnDate:  now,
+        lastActivityDate:   now,
+      },
+    });
 
   } catch (error: any) {
     console.error('Помилка при видачі слів:', error);
@@ -77,13 +139,52 @@ export const handleWords = async (ctx: Context) => {
   }
 };
 
-// 🔊 Обробник кнопки озвучки
+// ─── Обробник кнопки "Нагадати завтра" ───────────────────────────────────────
+
+export const handleReminderTomorrow = async (ctx: Context) => {
+  await ctx.answerCallbackQuery().catch(() => {});
+
+  const keyboard = new InlineKeyboard()
+    .text('08:00', 'set_reminder_08:00')
+    .text('10:00', 'set_reminder_10:00')
+    .text('12:00', 'set_reminder_12:00')
+    .row()
+    .text('18:00', 'set_reminder_18:00')
+    .text('20:00', 'set_reminder_20:00')
+    .text('22:00', 'set_reminder_22:00');
+
+  await ctx.reply(
+    '🕐 *О котрій нагадати?*\nОберіть зручний час (UTC):',
+    { parse_mode: 'Markdown', reply_markup: keyboard },
+  );
+};
+
+// ─── Обробник вибору часу нагадування ────────────────────────────────────────
+// Реєструй в app.ts: bot.callbackQuery(/^set_reminder_/, handleSetReminder)
+
+export const handleSetReminder = async (ctx: Context) => {
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+
+  await ctx.answerCallbackQuery().catch(() => {});
+
+  const time = ctx.callbackQuery?.data?.replace('set_reminder_', '') ?? '10:00';
+
+  await User.findOneAndUpdate({ telegramId }, { $set: { reminderTime: time } });
+
+  await ctx.reply(
+    `✅ Нагадування встановлено на *${time}* (UTC) завтра! 🔔`,
+    { parse_mode: 'Markdown' },
+  );
+};
+
+// ─── 🔊 Обробник кнопки озвучки ──────────────────────────────────────────────
+
 export const handleWordAudio = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   const callbackData = ctx.callbackQuery?.data;
   if (!callbackData || !telegramId) return;
 
-  // ✅ answerCallbackQuery — одразу, до будь-яких запитів
   await ctx.answerCallbackQuery().catch(() => {});
 
   const wordToPronounce = callbackData.substring('audio_'.length);
@@ -91,15 +192,11 @@ export const handleWordAudio = async (ctx: Context) => {
   try {
     const user = await User.findOne({ telegramId });
 
-    // 🧹 Видаляємо попереднє аудіо якщо є
     if (user?.lastAudioMessageId && ctx.chat?.id) {
-      await ctx.api
-        .deleteMessage(ctx.chat.id, user.lastAudioMessageId)
-        .catch(() => {});
+      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => {});
     }
 
     const audioUrl = getAudioUrl(wordToPronounce);
-
     const audioMessage = await ctx.replyWithVoice(audioUrl, {
       caption: `🔊 Вимова слова: *${wordToPronounce}*`,
       parse_mode: 'Markdown',
@@ -110,9 +207,7 @@ export const handleWordAudio = async (ctx: Context) => {
         $set: { lastAudioMessageId: audioMessage.message_id },
       });
     }
-
   } catch (error) {
     console.error('Помилка при надсиланні аудіо:', error);
-    // answerCallbackQuery вже викликано вище, тут лише логуємо
   }
 };

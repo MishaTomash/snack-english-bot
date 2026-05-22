@@ -8,7 +8,7 @@ export const showProfile = async (ctx: Context) => {
     try {
         const user = await User.findOne({ telegramId });
         if (!user) {
-            return ctx.reply('Будь ласка, спочатку обери свій уровень: /start');
+            return ctx.reply('Будь ласка, спочатку обери свій рівень: /start');
         }
 
         // Беремо дані з бази, якщо їх немає — ставимо 0
@@ -36,7 +36,8 @@ export const showProfile = async (ctx: Context) => {
                         month: '2-digit',
                         year: 'numeric'
                     });
-                    premiumInfo = `\n📅 *Діє до:* ${formattedDate}`;
+                    // Додаємо дату гарним форматом
+                    premiumInfo = ` (до ${formattedDate})`;
                 }
             }
         }
@@ -44,9 +45,10 @@ export const showProfile = async (ctx: Context) => {
         // Генеруємо мотиваційні вогники залежно від кількості днів поспіль
         const streakEmoji = streak > 0 ? '🔥'.repeat(Math.min(streak, 3)) : '💤';
 
+        // Формуємо фінальне повідомлення (рядок зі статусом тепер розкоментований)
         const message = `👤 *ТВІЙ ПРОФІЛЬ SNACKENGLISH*\n\n` +
-                        `🎓 *Поточний рівень:* ${user.level || 'Не обрано'}\n\n` +
-                        // `⭐️ *Статус акаунту:* ${accountStatus}${premiumInfo}\n\n` +
+                        `🎓 *Поточний рівень:* ${user.level || 'Не обрано'}\n` +
+                        `⭐️ *Статус акаунту:* ${accountStatus}${premiumInfo}\n\n` +
                         `📊 *Твій прогрес навчання:*\n` +
                         `${streakEmoji} Активність: *${streak} дн. поспіль*\n` +
                         `📚 Вивчено слів всього: *${wordsLearned}*\n` +
