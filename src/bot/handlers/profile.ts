@@ -11,16 +11,13 @@ export const showProfile = async (ctx: Context) => {
             return ctx.reply('Будь ласка, спочатку обери свій рівень: /start');
         }
 
-        // Беремо дані з бази, якщо їх немає — ставимо 0
         const streak = user.streak || 0;
         const wordsLearned = user.wordsLearned || 0;
         const testsPassed = user.testsPassed || 0;
-        const wordsToday = user.wordsLearnedToday || 0;
+        const xp = user.xp || 0;
         
         let accountStatus = '🆓 Безкоштовний';
-        let premiumInfo = '';
 
-        // Перевірка придатності Premium підписки
         if (user.isPremium) {
             if (user.premiumExpiresAt && new Date() > user.premiumExpiresAt) {
                 user.isPremium = false;
@@ -28,33 +25,42 @@ export const showProfile = async (ctx: Context) => {
                 await user.save();
                 accountStatus = '🆓 Безкоштовний';
             } else {
-                accountStatus = '💎 Premium';
-                
                 if (user.premiumExpiresAt) {
                     const formattedDate = user.premiumExpiresAt.toLocaleDateString('uk-UA', {
                         day: '2-digit',
                         month: '2-digit',
                         year: 'numeric'
                     });
-                    // Додаємо дату гарним форматом
-                    premiumInfo = ` (до ${formattedDate})`;
+                    accountStatus = `💎 Premium до ${formattedDate}`;
+                } else {
+                    accountStatus = '💎 Premium';
                 }
             }
         }
 
-        // Генеруємо мотиваційні вогники залежно від кількості днів поспіль
-        const streakEmoji = streak > 0 ? '🔥'.repeat(Math.min(streak, 3)) : '💤';
+        const streakEmoji = streak > 0 ? '🔥' : '💤';
 
-        // Формуємо фінальне повідомлення (рядок зі статусом тепер розкоментований)
-        const message = `👤 *ТВІЙ ПРОФІЛЬ SNACKENGLISH*\n\n` +
-                        `🎓 *Поточний рівень:* ${user.level || 'Не обрано'}\n` +
-                        `⭐️ *Статус акаунту:* ${accountStatus}${premiumInfo}\n\n` +
-                        `📊 *Твій прогрес навчання:*\n` +
-                        `${streakEmoji} Активність: *${streak} дн. поспіль*\n` +
-                        `📚 Вивчено слів всього: *${wordsLearned}*\n` +
-                        `📝 Слів вивчено сьогодні: *${wordsToday}*\n` +
-                        `🎯 Пройдено тестів: *${testsPassed}*\n\n` +
-                        `🏆 _Продовжуй у тому ж дусі! Кожен день наближає тебе до мети._`;
+        // Розрахунок прогрес-бару та Рангу
+        const LEVEL_SIZE = 1000; // Скільки XP треба для одного рангу
+        const currentRank = Math.floor(xp / LEVEL_SIZE) + 1;
+        const currentTierXp = xp % LEVEL_SIZE;
+        const progressPercent = Math.floor((currentTierXp / LEVEL_SIZE) * 100);
+        
+        // Малюємо смужку прогресу: ▓▓▓▓▓▓░░░░
+        const filledBars = Math.round(progressPercent / 10);
+        const progressBar = '▓'.repeat(filledBars) + '░'.repeat(10 - filledBars);
+        const xpLeft = LEVEL_SIZE - currentTierXp;
+
+        const message = `👤 *Профіль SnackEnglish*\n\n` +
+                        `🎓 Рівень: ${user.level || 'Не обрано'}\n` +
+                        `${accountStatus}\n\n` +
+                        `🏆 *Ранг ${currentRank}* (${xp} XP)\n` +
+                        `${progressBar} ${progressPercent}%\n` +
+                        `_До наступного рангу: ${xpLeft} XP_\n\n` +
+                        `${streakEmoji} Серія: ${streak} дн.\n` +
+                        `📚 Вивчено слів: ${wordsLearned}\n` +
+                        `📝 Тестів пройдено: ${testsPassed}\n\n` +
+                        `🏆 _Продовжуй щодня — прогрес уже видно._`;
 
         await ctx.reply(message, { parse_mode: 'Markdown' });
     } catch (error) {

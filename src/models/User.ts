@@ -7,6 +7,7 @@ export interface IUser extends Document {
     lastActive?: Date;
     wordsLearned?: number;
     testsPassed?: number;
+    xp?: number;                      // ← ДОДАНО ПОЛЕ XP (Досвід)
     // Freemium 💎
     isPremium: boolean;
     premiumExpiresAt?: Date;          // aliases: premiumUntil
@@ -26,8 +27,7 @@ export interface IUser extends Document {
     seenWords: Schema.Types.ObjectId[];
     seenTexts: Schema.Types.ObjectId[];
     seenTests: Schema.Types.ObjectId[];
-    seenLearnedTests: Schema.Types.ObjectId[];  // ← ДОДАЙ ЦЕ
-
+    seenLearnedTests: Schema.Types.ObjectId[];
 }
 
 const UserSchema: Schema = new Schema({
@@ -37,6 +37,7 @@ const UserSchema: Schema = new Schema({
     lastActive: { type: Date },
     wordsLearned: { type: Number, default: 0 },
     testsPassed: { type: Number, default: 0 },
+    xp: { type: Number, default: 0 }, // ← ДОДАНО ПОЛЕ XP (за замовчуванням 0)
     // Freemium
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date },

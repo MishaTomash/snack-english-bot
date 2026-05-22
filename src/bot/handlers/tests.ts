@@ -31,7 +31,10 @@ const sendTestMessage = async (
 ) => {
   const questionText = testData.question.replace(/___/g, '…');
   const safeQuestion = escapeMarkdownV2(questionText);
-  const message = `🧠 *Міні\\-тест*\n\n${safeQuestion}`;
+  
+  // 1. Різні заголовки залежно від типу тесту
+  const title = source === 'general' ? '🎯 *Міні\\-тест*' : '🧪 *Тест до слова*';
+  const message = `${title}\n\n${safeQuestion}`;
 
   const keyboard = buildTestKeyboard(
     testData._id.toString(),
@@ -53,7 +56,7 @@ const sendTestMessage = async (
   }
 };
 
-// ─── Екран "Всі тести пройдено" (Виправляє баг із зависанням тексту) ─────────
+// ─── Екран "Всі тести пройдено" ──────────────────────────────────────────────
 const sendAllDoneMessage = async (ctx: Context) => {
   const text =
     '✅ *Ти вже пройшов усі тести до вивчених слів\\!*\n\n' +
@@ -169,6 +172,7 @@ export const handleLearnedTestRepeat = async (ctx: Context) => {
 };
 
 // ─── Обробка відповіді ────────────────────────────────────────────────────────
+// ─── Обробка відповіді ────────────────────────────────────────────────────────
 export const handleTestAnswer = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   const callbackData = ctx.callbackQuery?.data;
@@ -178,16 +182,34 @@ export const handleTestAnswer = async (ctx: Context) => {
   const source = parts[parts.length - 1] as TestSource;
   const isCorrect = parts[parts.length - 2] === '1';
 
-  await ctx.answerCallbackQuery({
-    text: isCorrect ? '✅ Правильно! Молодець!' : '❌ Неправильно. Спробуй ще раз!',
-    show_alert: true,
-  }).catch(() => {});
+  let alertText = isCorrect ? '✅ Правильно! +5 XP 🎯' : '❌ Неправильно. Спробуй ще раз!';
+  let showAlert = false; // За замовчуванням повідомлення просто швидко зникає зверху
 
+  // Якщо правильно — спочатку зберігаємо прогрес, щоб дізнатися новий XP
   if (isCorrect) {
-    await updateUserProgress(telegramId, 'test');
+    const progress = await updateUserProgress(telegramId, 'test');
+    const totalXp = progress?.totalXp || 0;
+    
+    // Визначаємо ранг до і після правильної відповіді (ми додали 5 XP)
+    const oldRank = Math.floor((totalXp - 5) / 1000) + 1;
+    const newRank = Math.floor(totalXp / 1000) + 1;
+
+    // Якщо ранг виріс — змінюємо текст і робимо велике спливаюче вікно
+    if (newRank > oldRank) {
+      alertText = `🎉 ВАУ! ТИ ОТРИМАВ ${newRank} РАНГ! 🏆\nПродовжуй у тому ж дусі!`;
+      showAlert = true; 
+    }
   }
 
-  if (isCorrect && source === 'general') {
+  // Виводимо повідомлення користувачу
+  await ctx.answerCallbackQuery({
+    text: alertText,
+    show_alert: showAlert,
+  }).catch(() => {});
+
+  if (!isCorrect) return;
+
+  if (source === 'general') {
     const user = await User.findOne({ telegramId });
     if (user?.isPremium) {
       const wordToPronounce = ctx.callbackQuery?.message?.reply_markup?.inline_keyboard
@@ -202,18 +224,14 @@ export const handleTestAnswer = async (ctx: Context) => {
     }
   }
 
-  const nextCallbackMap: Record<TestSource, string> = {
-    general: 'next_test',
-    learned: 'next_learned_test',
-    repeat:  'next_repeat_test',
-  };
-
-  const nextKeyboard = new InlineKeyboard().text(
-    '🔄 Наступне питання', 
-    nextCallbackMap[source] ?? 'next_test'
-  );
-  
-  await ctx.editMessageReplyMarkup({ reply_markup: nextKeyboard }).catch(() => {});
+  // Автоматичний перехід до наступного питання
+  if (source === 'general') {
+    await sendRandomTest(ctx);
+  } else if (source === 'learned') {
+    await sendLearnedWordsTest(ctx);
+  } else if (source === 'repeat') {
+    await handleNextRepeatTest(ctx);
+  }
 };
 
 // ─── Наступне питання в режимі повторення ────────────────────────────────────
@@ -234,7 +252,6 @@ export const handleNextRepeatTest = async (ctx: Context) => {
     }
 
     if (result.isRepeat) {
-      // Ось тут була помилка: раніше змінювались тільки кнопки, а текст залишався старим
       return sendAllDoneMessage(ctx);
     }
 

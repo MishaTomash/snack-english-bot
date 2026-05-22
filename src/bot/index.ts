@@ -139,12 +139,8 @@ bot.on('message:text', async (ctx, next) => {
 bot.on('message', handleAdminMessages);
 
 // ─── Кнопки головного меню ───────────────────────────────────────────────────
-bot.hears('📚 Нові слова', checkWordLimits, handleWords);
-bot.hears('📝 Тексти для перекладу', sendRandomText);
-bot.hears('🎓 Курси', handleCoursesList);
-bot.hears('👤 Мій профіль', showProfile);
+
 bot.hears('💎 Premium', sendPremiumOffer);
-bot.hears('⚙️ Налаштування', showSettings);
 bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
 bot.hears('➕ Додати слово', handleAddWordPrompt);
 bot.hears('➕ Додати тест', handleAddTestPrompt);
@@ -156,5 +152,12 @@ bot.hears('👥 Користувачі', handleAdminUsers);
 bot.hears('📢 Розсилка', handleBroadcastStart);
 bot.hears('💖 Підтримати', handleSupportMenu);
 bot.hears('🔄 Оновити меню', handleForceMenuUpdate);
+
+bot.hears('📚 Вчити слова', checkWordLimits, handleWords);
+bot.hears('📝 Перевірка слів', sendLearnedWordsTest);
 bot.hears('🎯 Міні-тести', sendRandomTest);
-bot.hears('🧪 Тести до слів', sendLearnedWordsTest);
+bot.hears('📖 Тексти', sendRandomText);
+bot.hears('💾 Словничок', handleSavedWords);
+bot.hears('👤 Профіль', showProfile);
+bot.hears('⚙️ Налаштування', showSettings);
+bot.hears('🎓 Курси', handleCoursesList);

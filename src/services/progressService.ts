@@ -2,7 +2,7 @@ import { User } from '../models/User';
 
 export const updateUserProgress = async (telegramId: number, activityType: 'word' | 'test', itemId?: string) => {
     const user = await User.findOne({ telegramId });
-    if (!user) return;
+    if (!user) return { gainedXp: 0, streak: 0 };
 
     const now = new Date();
     // Вираховуємо початок сьогоднішнього дня (00:00:00)
@@ -31,22 +31,31 @@ export const updateUserProgress = async (telegramId: number, activityType: 'word
             user.streak = 1; 
             user.wordsLearnedToday = 0;
         }
-        // Якщо diffDays === 0, то він просто зайшов ще раз сьогодні — нічого не міняємо
     }
 
     user.lastActivityDate = now;
 
-    // ... (тут залишається твоя логіка нарахування слів та тестів)
+    let gainedXp = 0;
+
+    // 2. НАРАХУВАННЯ СЛІВ, ТЕСТІВ ТА XP
     if (activityType === 'word' && itemId) {
         if (!user.learnedWordIds) user.learnedWordIds = [];
         if (!user.learnedWordIds.includes(itemId)) {
             user.learnedWordIds.push(itemId);
             user.wordsLearned = user.learnedWordIds.length;
             user.wordsLearnedToday = (user.wordsLearnedToday || 0) + 1;
+            // ТУТ XP НЕ НАРАХОВУЄМО — захист від "читерства"
         }
     } else if (activityType === 'test') {
         user.testsPassed = (user.testsPassed || 0) + 1;
+        
+        // Даємо +5 XP ТІЛЬКИ за кожен правильний тест!
+        gainedXp = 5;
+        user.xp = (user.xp || 0) + gainedXp;
     }
 
     await user.save();
+    
+    // Повертаємо інформацію, щоб її можна було використати в повідомленнях
+    return { gainedXp, totalXp: user.xp, streak: user.streak };
 };

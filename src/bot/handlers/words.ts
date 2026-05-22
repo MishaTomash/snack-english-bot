@@ -21,7 +21,6 @@ export const handleWords = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  // ✅ ПРАВИЛО №1: answerCallbackQuery — ЗАВЖДИ ПЕРШИМ
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery().catch(() => {});
   }
@@ -35,8 +34,6 @@ export const handleWords = async (ctx: Context) => {
 
     const now = new Date();
 
-    // ─── Скидання лічильника при новому дні ──────────────────────────────────
-    // Якщо lastWordLearnDate відсутня АБО це інший UTC-день → скидаємо
     const lastLearnDate = user.lastWordLearnDate;
     const isNewDay = !lastLearnDate || !isSameUTCDay(lastLearnDate, now);
 
@@ -44,7 +41,6 @@ export const handleWords = async (ctx: Context) => {
     let carriedOverWords  = user.carriedOverWords  ?? 0;
 
     if (isNewDay) {
-      // carry-over: скільки невикористаних слотів з учора (max 3)
       const unused = DAILY_WORD_LIMIT - wordsLearnedToday;
       carriedOverWords = Math.min(Math.max(unused, 0), 0);
       wordsLearnedToday = 0;
@@ -57,7 +53,6 @@ export const handleWords = async (ctx: Context) => {
       });
     }
 
-    // ─── Перевірка денного ліміту ─────────────────────────────────────────────
     const effectiveLimit = DAILY_WORD_LIMIT + carriedOverWords;
 
     if (!user.isPremium && wordsLearnedToday >= effectiveLimit) {
@@ -83,7 +78,6 @@ export const handleWords = async (ctx: Context) => {
       return ctx.reply(limitMsg, { parse_mode: 'Markdown', reply_markup: limitKeyboard });
     }
 
-    // ─── Видалення попереднього аудіо ─────────────────────────────────────────
     if (user.lastAudioMessageId && ctx.chat?.id) {
       await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => {});
       await User.findByIdAndUpdate(user._id, { $set: { lastAudioMessageId: null } });
@@ -98,10 +92,10 @@ export const handleWords = async (ctx: Context) => {
     const word = words[0];
 
     const message =
-      `📚 *Твоє слово на сьогодні (Рівень ${user.level}):*\n\n` +
+      `📚 *Твоє слово на сьогодні (${user.level})*\n\n` +
       `🇺🇦 ${word.ukrainian}\n` +
       `🇬🇧 ${word.english}\n` +
-      `🔤 ${word.transcription}`;
+      `🔊 ${word.transcription}`;
 
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)
@@ -122,9 +116,6 @@ export const handleWords = async (ctx: Context) => {
       await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
     }
 
-    // ─── Оновлення лічильника ─────────────────────────────────────────────────
-    // lastWordLearnDate — дата останнього слова (використовується для перевірки на новий день)
-    // progressService вже робить +1 до слів та оновлює lastActivityDate
     await updateUserProgress(telegramId, 'word', word._id.toString());
     await User.findByIdAndUpdate(user._id, {
       $set: {
@@ -137,8 +128,6 @@ export const handleWords = async (ctx: Context) => {
     await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => {});
   }
 };
-
-// ─── Обробник кнопки "Нагадати завтра" ───────────────────────────────────────
 
 export const handleReminderTomorrow = async (ctx: Context) => {
   await ctx.answerCallbackQuery().catch(() => {});
@@ -158,8 +147,6 @@ export const handleReminderTomorrow = async (ctx: Context) => {
   );
 };
 
-// ─── Обробник вибору часу нагадування ────────────────────────────────────────
-
 export const handleSetReminder = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
@@ -175,8 +162,6 @@ export const handleSetReminder = async (ctx: Context) => {
     { parse_mode: 'Markdown' },
   );
 };
-
-// ─── 🔊 Обробник кнопки озвучки ──────────────────────────────────────────────
 
 export const handleWordAudio = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
