@@ -1,11 +1,12 @@
 import { CommandContext, Context } from 'grammy';
 import { User } from '../../models/User';
 import { levelKeyboard } from '../keyboards/level'; 
+import { createMainMenu } from '../keyboards/main'; // 👈 ДОДАНО: імпорт твого головного меню
 
 export const handleStart = async (ctx: CommandContext<Context>) => {
   const telegramId = ctx.from?.id;
   const firstName = ctx.from?.first_name || 'Студент';
-  const username = ctx.from?.username; // 👈 ДОДАНО: дістаємо юзернейм
+  const username = ctx.from?.username; 
 
   if (!telegramId) return;
 
@@ -18,7 +19,7 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
       user = new User({ 
           telegramId, 
           firstName, 
-          username // 👈 ДОДАНО: зберігаємо username
+          username 
       });
       await user.save();
 
@@ -26,7 +27,7 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
         reply_markup: levelKeyboard,
       });
     } else {
-      // 👈 ДОДАНО: Оновлюємо дані про всяк випадок (якщо юзер змінив нік)
+      // Оновлюємо дані про всяк випадок (якщо юзер змінив нік)
       user.username = username;
       await user.save();
 
@@ -36,8 +37,10 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
           reply_markup: levelKeyboard,
         });
       } else {
-        // Якщо користувач вже зареєстрований і має рівень
-        await ctx.reply(`З поверненням, ${firstName}! Твій рівень: ${user.level}. Готовий до нових слів? 🍪`);
+        // 👈 ДОДАНО: прикріплюємо головне меню до привітання
+        await ctx.reply(`З поверненням, ${firstName}! Твій рівень: ${user.level}. Готовий до нових слів? 🍪`, {
+            reply_markup: createMainMenu()
+        });
       }
     }
   } catch (error) {

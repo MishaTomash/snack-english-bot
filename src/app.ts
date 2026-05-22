@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { bot } from './bot';
 import { config } from './config';
 import { startCronJobs } from './bot/cron';
-import { GrammyError, HttpError } from 'grammy'; // 👈 ДОДАНО ІМПОРТ
+import { GrammyError, HttpError } from 'grammy'; // 👈 ДОДАНО ІМПОРТ 
 
 // 👇 ДОДАНО ОБРОБНИК ПОМИЛОК
 bot.catch((err) => {
