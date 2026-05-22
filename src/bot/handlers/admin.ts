@@ -6,6 +6,7 @@ import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
 import { Text } from '../../models/Text';
 import { User } from '../../models/User';
+import { TopCycle } from '../../models/TopCycle'; 
 
 // ─── Константи ───────────────────────────────────────────────────────────────
 
@@ -341,40 +342,133 @@ export const handleBroadcastStart = async (ctx: Context) => {
   );
 };
 
+
+// ─── Управління ТОПом ────────────────────────────────────────────────────────
+
+export const handleAdminTopMenu = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  let cycle = await TopCycle.findOne({ isActive: true });
+  if (!cycle) {
+      const nextDate = new Date();
+      nextDate.setDate(nextDate.getDate() + 30);
+      cycle = await TopCycle.create({ endDate: nextDate, seasonNumber: 1 });
+  }
+
+  const text = `🏆 <b>Управління ТОПом (Сезон ${cycle.seasonNumber})</b>\n\n` +
+               `📅 Дата завершення: <b>${cycle.endDate.toLocaleDateString('uk-UA')}</b>\n\n` +
+               `Оберіть дію:`;
+               
+  const kb = new InlineKeyboard()
+      .text('📅 Змінити дату', 'adm_top_set_date').row()
+      .text('🛑 Завершити сезон зараз', 'adm_top_end');
+      
+  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+};
+
+export const handleAdminTopSetDatePrompt = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery();
+  adminState.set(ctx.from!.id, 'waiting_for_top_date');
+  await ctx.reply('📅 Надішли нову дату завершення ТОПу у форматі: <code>ДД.ММ.РРРР</code> (наприклад: <code>31.05.2026</code>)', { parse_mode: 'HTML' });
+};
+
+export const handleAdminTopEnd = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery();
+  
+  // 1. Формуємо результати
+  const topUsers = await User.find({ isPremium: true, seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).limit(5).lean();
+  let resultText = `🏆 <b>РЕЗУЛЬТАТИ СЕЗОНУ!</b>\n\n`;
+  topUsers.forEach((u, i) => {
+      const name = u.username ? `@${u.username}` : (u.firstName || 'Анонім');
+      // Обов'язково екрануємо імена, щоб символи "<" або ">" не зламали HTML
+      resultText += `${i+1}. ${escapeHtml(name)} - <b>${u.seasonXp}</b> балів\n`;
+  });
+  
+  if (topUsers.length === 0) resultText += `Ніхто не брав участі 😔`;
+  
+  await ctx.reply(resultText, { parse_mode: 'HTML' });
+
+  // 2. Скидаємо Premium та seasonXp всім користувачам!
+  await User.updateMany({}, { isPremium: false, premiumExpiresAt: null, seasonXp: 0 });
+
+  // 3. Запускаємо новий сезон
+  const oldCycle = await TopCycle.findOne({ isActive: true });
+  if (oldCycle) {
+      oldCycle.isActive = false;
+      await oldCycle.save();
+  }
+  
+  const nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + 30);
+  await TopCycle.create({ seasonNumber: (oldCycle?.seasonNumber || 0) + 1, endDate: nextDate });
+
+  await ctx.reply('✅ <b>Сезон завершено!</b>\nВсім користувачам анульовано Premium та скинуто бали сезону. Почався новий турнір!', { parse_mode: 'HTML' });
+};
+
+// ЗНАЙДИ функцию handleAdminMessages і додай цей блок ПЕРЕД блоком розсилки (перед `if (adminState.get(adminId) !== 'waiting_for_broadcast') return next();`):
+
 export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
   const adminId = ctx.from?.id;
   if (!adminId) return next();
-  if (adminState.get(adminId) !== 'waiting_for_broadcast') return next();
 
+  // Отримуємо поточний стан (що саме зараз вводить адмін)
+  const state = adminState.get(adminId);
+
+  // Якщо адмін нічого не вводить — ПРОПУСКАЄМО далі до кнопок меню!
+  if (!state) return next();
+
+  // Спільна обробка команди скасування
   if (ctx.message?.text === '/cancel') {
     adminState.delete(adminId);
-    return ctx.reply('🚫 Розсилку скасовано.');
+    return ctx.reply('🚫 Дія скасована.');
   }
 
-  adminState.delete(adminId);
-  await ctx.reply('⏳ Починаю розсилку...');
-
-  try {
-    const users = await User.find({}).lean();
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of users) {
-      try {
-        await ctx.copyMessage(user.telegramId);
-        successCount++;
-        await new Promise((res) => setTimeout(res, 50));
-      } catch {
-        failCount++;
+  // --- ОБРОБКА ДАТИ ТОПУ ---
+  if (state === 'waiting_for_top_date') {
+    const textData = ctx.message?.text ?? '';
+    const parts = textData.split('.');
+    if (parts.length === 3) {
+      const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T23:59:59Z`);
+      if (!isNaN(date.getTime())) {
+        await TopCycle.findOneAndUpdate({ isActive: true }, { endDate: date });
+        adminState.delete(adminId);
+        return ctx.reply(`✅ Дату успішно змінено на ${date.toLocaleDateString('uk-UA')}!`);
       }
     }
-
-    await ctx.reply(
-      `✅ <b>Розсилка завершена!</b>\n\nУспішно: <b>${successCount}</b>\nЗаблокували бота: <b>${failCount}</b>`,
-      { parse_mode: 'HTML' },
-    );
-  } catch (error) {
-    console.error('Помилка розсилки:', error);
-    await ctx.reply('❌ Критична помилка під час розсилки.');
+    return ctx.reply('❌ Неправильний формат. Використовуйте ДД.ММ.РРРР (наприклад, 31.05.2026). Або /cancel');
   }
+
+  // --- ОБРОБКА РОЗСИЛКИ ---
+  if (state === 'waiting_for_broadcast') {
+    adminState.delete(adminId);
+    await ctx.reply('⏳ Починаю розсилку...');
+
+    try {
+      const users = await User.find({}).lean();
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const user of users) {
+        try {
+          await ctx.copyMessage(user.telegramId);
+          successCount++;
+          await new Promise((res) => setTimeout(res, 50));
+        } catch {
+          failCount++;
+        }
+      }
+
+      return ctx.reply(
+        `✅ <b>Розсилка завершена!</b>\n\nУспішно: <b>${successCount}</b>\nЗаблокували бота: <b>${failCount}</b>`,
+        { parse_mode: 'HTML' },
+      );
+    } catch (error) {
+      console.error('Помилка розсилки:', error);
+      return ctx.reply('❌ Критична помилка під час розсилки.');
+    }
+  }
+
+  // Якщо стан якийсь інший (хоча такого не має бути) — пускаємо далі
+  return next();
 };

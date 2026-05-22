@@ -12,7 +12,8 @@ import { showSettings, handleChangeLevelClick } from './handlers/settings';
 import {
   handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,
   handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers, handleAdminUsersPagination,
-  handleAdminMessages, handleAdminStats, handleBroadcastStart,
+  handleAdminMessages, handleAdminStats, handleBroadcastStart, handleAdminTopMenu, 
+  handleAdminTopSetDatePrompt, handleAdminTopEnd,
 } from './handlers/admin';
 import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
 import { handleSupportMenu, handleStarsInvoice, handlePreCheckout, handleSuccessfulPayment } from './handlers/support';
@@ -121,6 +122,9 @@ bot.callbackQuery(/^adm_test_delconfirm_/, handleAdminTestDelConfirm);
 bot.callbackQuery('show_top', handleTopMenu); // <-- ДОДАЙ ЦЕ
 bot.callbackQuery('show_profile_btn', showProfile); // <-- ДОДАЙ ЦЕ
 
+bot.callbackQuery('adm_top_set_date', handleAdminTopSetDatePrompt);
+bot.callbackQuery('adm_top_end', handleAdminTopEnd);
+
 // ─── Платежі ─────────────────────────────────────────────────────────────────
 bot.on('pre_checkout_query', handlePreCheckout);
 bot.on('message:successful_payment', async (ctx) => {
@@ -167,3 +171,4 @@ bot.hears('👤 Профіль', showProfile);
 bot.hears('⚙️ Налаштування', showSettings);
 bot.hears('🎓 Курси', handleCoursesList);
 bot.hears('🏆 Топ', handleTopMenu); // <-- ДОДАЙ ЦЕ
+bot.hears('🏆 Управління ТОПом', handleAdminTopMenu);

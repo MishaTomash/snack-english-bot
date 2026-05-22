@@ -82,7 +82,7 @@ export const updateUserProgress = async (
         }
 
         if ((user.testXpEarnedToday || 0) + 10 <= 200) {
-            gainedXp = 10; // +10 XP за тест
+            gainedXp = 5; // +10 XP за тест
             user.testXpEarnedToday = (user.testXpEarnedToday || 0) + 10;
         } else {
             gainedXp = 0; // Ліміт досягнуто
@@ -93,9 +93,10 @@ export const updateUserProgress = async (
         gainedXp = 30; // +30 XP за текст
     }
 
-    // Додаємо звичайні XP + Бонус за серію (бонус дається лише при зміні дня)
+
     const totalGainedThisTurn = gainedXp + streakBonusXp;
     user.xp = (user.xp || 0) + totalGainedThisTurn;
+    user.seasonXp = (user.seasonXp || 0) + totalGainedThisTurn; // <--- ДОДАТИ ЦЕЙ РЯДОК
 
     await user.save();
     

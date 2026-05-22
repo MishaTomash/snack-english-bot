@@ -31,6 +31,7 @@ export interface IUser extends Document {
     seenTexts: Schema.Types.ObjectId[];
     seenTests: Schema.Types.ObjectId[];
     seenLearnedTests: Schema.Types.ObjectId[];
+    seasonXp: number;
 }
 
 const UserSchema: Schema = new Schema({
@@ -59,6 +60,7 @@ const UserSchema: Schema = new Schema({
     seenTexts: { type: [Schema.Types.ObjectId], default: [] },
     seenTests: { type: [Schema.Types.ObjectId], default: [] },
     seenLearnedTests: { type: [Schema.Types.ObjectId], default: [] }, 
+    seasonXp: { type: Number, default: 0 },
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

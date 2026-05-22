@@ -1,6 +1,7 @@
 import { Context } from 'grammy';
 import { User } from '../../models/User';
 import { LabeledPrice } from 'grammy/types';
+import { TopCycle } from '../../models/TopCycle';
 
 export const sendPremiumOffer = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
@@ -33,26 +34,32 @@ export const handlePreCheckoutQuery = async (ctx: Context) => {
   await ctx.answerPreCheckoutQuery(true).catch(console.error);
 };
 
-// 👇 ОСЬ ТУТ ВИПРАВЛЕНО НАЗВУ ФУНКЦІЇ
 export const handlePremiumPaymentSuccess = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 30);
+  // Отримуємо поточний сезон
+  let activeCycle = await TopCycle.findOne({ isActive: true });
+  if (!activeCycle) {
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 30);
+    activeCycle = await TopCycle.create({ endDate: defaultDate, seasonNumber: 1 });
+  }
 
   await User.findOneAndUpdate(
     { telegramId },
     {
-      isPremium:        true,
-      premiumExpiresAt: expirationDate,
+      isPremium: true,
+      premiumExpiresAt: activeCycle.endDate,
     },
   );
 
+  const formattedDate = activeCycle.endDate.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
   await ctx.reply(
     `🎉 *Вітаємо! Оплата успішна!*\n\n` +
-    `💎 Твій статус *Premium* успішно активовано на 30 днів! Тепер тобі доступні всі функції без обмежень.\n\n` +
-    `Дякуємо за підтримку проєкту! 🚀`,
+    `💎 Твій статус *Premium* активовано! Він діятиме до кінця поточного сезону ТОПу (*${formattedDate}*).\n\n` +
+    `Змагайся за призи та досягай нових висот! 🚀`,
     { parse_mode: 'Markdown' },
   );
 };
