@@ -6,7 +6,7 @@ import { updateUserProgress } from '../../services/progressService';
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
-const DAILY_WORD_LIMIT = 5;
+const DAILY_WORD_LIMIT = 10;
 
 // ─── Хелпер: чи та сама UTC-дата ─────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ export const handleWords = async (ctx: Context) => {
     if (isNewDay) {
       // carry-over: скільки невикористаних слотів з учора (max 3)
       const unused = DAILY_WORD_LIMIT - wordsLearnedToday;
-      carriedOverWords = Math.min(Math.max(unused, 0), 3);
+      carriedOverWords = Math.min(Math.max(unused, 0), 0);
       wordsLearnedToday = 0;
 
       await User.findByIdAndUpdate(user._id, {
@@ -123,13 +123,12 @@ export const handleWords = async (ctx: Context) => {
     }
 
     // ─── Оновлення лічильника ─────────────────────────────────────────────────
-    // lastWordLearnDate — дата останнього слова (використовується для скидання)
+    // lastWordLearnDate — дата останнього слова (використовується для перевірки на новий день)
+    // progressService вже робить +1 до слів та оновлює lastActivityDate
     await updateUserProgress(telegramId, 'word', word._id.toString());
     await User.findByIdAndUpdate(user._id, {
-      $inc: { wordsLearnedToday: 1 },
       $set: {
-        lastWordLearnDate:  now,
-        lastActivityDate:   now,
+        lastWordLearnDate: now,
       },
     });
 
@@ -160,7 +159,6 @@ export const handleReminderTomorrow = async (ctx: Context) => {
 };
 
 // ─── Обробник вибору часу нагадування ────────────────────────────────────────
-// Реєструй в app.ts: bot.callbackQuery(/^set_reminder_/, handleSetReminder)
 
 export const handleSetReminder = async (ctx: Context) => {
   const telegramId = ctx.from?.id;

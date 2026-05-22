@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 
 /**
  * Випадковий загальний тест для рівня юзера (якого ще не бачив).
+ * Видає ТІЛЬКИ ті тести, які НЕ прив'язані до конкретних слів (wordId: null).
  */
 export const getRandomTest = async (user: IUser): Promise<ITestQuestion | null> => {
   const seenIds = user.seenTests.map((id) => new Types.ObjectId(id.toString()));
@@ -12,6 +13,7 @@ export const getRandomTest = async (user: IUser): Promise<ITestQuestion | null> 
     {
       $match: {
         level: user.level,
+        wordId: null, // 👈 ОСЬ ГОЛОВНЕ ВИПРАВЛЕННЯ: беремо тільки загальні тести
         ...(excludeIds.length > 0 && { _id: { $nin: excludeIds } }),
       },
     },
@@ -39,6 +41,9 @@ export const getRandomTest = async (user: IUser): Promise<ITestQuestion | null> 
   return tests[0];
 };
 
+/**
+ * Отримує наступний тест до вивчених слів юзера.
+ */
 export const getTestForLearnedWords = async (
   user: IUser,
 ): Promise<{ test: ITestQuestion; isRepeat: boolean } | null> => {
@@ -83,8 +88,9 @@ export const getTestForLearnedWords = async (
 
   return { test: anyTest[0], isRepeat: true };
 };
+
 /**
- * Тест прив'язаний до конкретного слова (wordId).
+ * Тест прив'язаний до конкретного слова (wordId). Режим повторення.
  */
 export const resetAndGetLearnedTest = async (
   user: IUser,

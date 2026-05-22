@@ -18,7 +18,6 @@ export interface ICourse extends Document {
   slug: string;
   title: string;
   description: string;
-  priceStars: number;
   lessons: ICourseLesson[];
   isPublished: boolean;
   createdAt: Date;
@@ -49,7 +48,6 @@ const CourseSchema = new Schema<ICourse>(
     slug: { type: String, required: true, unique: true },
     title: { type: String, required: true },
     description: { type: String, default: '' },
-    priceStars: { type: Number, default: 0 },
     lessons: { type: [CourseLessonSchema], default: [] },
     isPublished: { type: Boolean, default: false },
   },

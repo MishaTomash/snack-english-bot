@@ -1,6 +1,7 @@
 import { Context, InlineKeyboard } from 'grammy';
 import { Course, ICourse } from '../../models/Course';
 import { CourseProgress } from '../../models/CourseProgress';
+import { User } from '../../models/User';
 
 // ─── Хелпери ─────────────────────────────────────────────────────────────────
 
@@ -15,25 +16,6 @@ const progressBar = (current: number, total: number): string => {
   return '█'.repeat(filled) + '░'.repeat(10 - filled) + ` ${pct}%`;
 };
 
-const getAccessMap = async (
-  telegramId: number,
-  courses: ICourse[],
-): Promise<Map<string, { hasAccess: boolean; progress: number; started: boolean }>> => {
-  const progresses = await CourseProgress.find({ telegramId }).lean();
-  const map = new Map<string, { hasAccess: boolean; progress: number; started: boolean }>();
-  for (const course of courses) {
-    const prog = progresses.find((p) => p.courseSlug === course.slug);
-    const isFree = course.priceStars === 0;
-    const hasBought = !!prog?.purchasedAt;
-    map.set(course.slug, {
-      hasAccess: isFree || hasBought,
-      progress: prog?.currentLesson ?? 0,
-      started: !!prog,
-    });
-  }
-  return map;
-};
-
 // ─── 1. Список курсів ─────────────────────────────────────────────────────────
 
 export const handleCoursesList = async (ctx: Context) => {
@@ -42,7 +24,11 @@ export const handleCoursesList = async (ctx: Context) => {
 
   if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
 
-  const courses = await Course.find({ isPublished: true }).lean();
+  const user = await User.findOne({ telegramId }).lean();
+  if (!user) return;
+
+  // Виводимо курси за датою створення. Найстаріший (індекс 0) буде безкоштовним!
+  const courses = await Course.find({ isPublished: true }).sort({ createdAt: 1 }).lean();
 
   if (courses.length === 0) {
     const msg = 'На жаль, курси поки що не додані 😔';
@@ -51,39 +37,47 @@ export const handleCoursesList = async (ctx: Context) => {
     return;
   }
 
-  const accessMap = await getAccessMap(telegramId, courses as ICourse[]);
+  const progresses = await CourseProgress.find({ telegramId }).lean();
 
   let text = `📚 <b>МОЇ КУРСИ</b>\n\n`;
   const keyboard = new InlineKeyboard();
 
-  for (const course of courses) {
-    const info = accessMap.get(course.slug)!;
-    const icon = info.hasAccess ? '✅' : '🔒';
-    const priceLabel = course.priceStars === 0 ? 'Безкоштовно' : `${course.priceStars} ⭐`;
+  courses.forEach((course, index) => {
+    // Головна логіка: 0 індекс = перший курс (безкоштовно), інакше потрібен Premium
+    const isFirstCourse = index === 0;
+    const hasAccess = isFirstCourse || user.isPremium;
+    
+    const prog = progresses.find((p) => p.courseSlug === course.slug);
+    const currentLesson = prog?.currentLesson ?? 0;
+    const started = !!prog;
     const totalLessons = course.lessons.length;
+
+    const icon = hasAccess ? '✅' : '🔒';
+    const accessLabel = isFirstCourse ? 'Безкоштовно' : 'Premium 💎';
 
     text += `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
     text += `┃ ${icon} <b>${e(course.title)}</b>\n`;
     text += `┃ ──────────────────────────\n`;
-    text += `┃ 💰 ${priceLabel}\n`;
+    text += `┃ 💳 Доступ: <b>${accessLabel}</b>\n`;
 
-    if (info.hasAccess && totalLessons > 0) {
-      const bar = progressBar(info.progress, totalLessons);
+    if (hasAccess && totalLessons > 0) {
+      const bar = progressBar(currentLesson, totalLessons);
       text += `┃ 📊 Прогрес: ${bar}\n`;
-      text += `┃ 📖 Урок ${info.progress}/${totalLessons}\n`;
+      text += `┃ 📖 Урок ${currentLesson}/${totalLessons}\n`;
     }
 
     text += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
 
-    if (info.hasAccess) {
-      const btnLabel = info.started && info.progress > 0
+    if (hasAccess) {
+      const btnLabel = started && currentLesson > 0
         ? `▶ Продовжити: ${course.title}`
         : `📖 Відкрити: ${course.title}`;
       keyboard.text(btnLabel, `course_open_${course.slug}`).row();
     } else {
-      keyboard.text(`💎 Купити ${course.title} — ${course.priceStars}⭐`, `course_buy_${course.slug}`).row();
+      // Якщо немає доступу, направляємо на покупку Premium
+      keyboard.text(`💎 Отримати Premium для доступу`, `buy_premium`).row();
     }
-  }
+  });
 
   const opts = { parse_mode: 'HTML' as const, reply_markup: keyboard };
   if (ctx.callbackQuery) {
@@ -105,15 +99,19 @@ export const handleCourseOpen = async (ctx: Context) => {
   const course = await Course.findOne({ slug, isPublished: true }).lean();
   if (!course) return;
 
-  const isFree = course.priceStars === 0;
-  let progress = await CourseProgress.findOne({ telegramId, courseSlug: slug });
-  const hasAccess = isFree || !!progress?.purchasedAt;
+  const allCourses = await Course.find({ isPublished: true }).sort({ createdAt: 1 }).lean();
+  const courseIndex = allCourses.findIndex(c => c.slug === slug);
+  const isFirstCourse = courseIndex === 0;
+
+  const user = await User.findOne({ telegramId });
+  const hasAccess = isFirstCourse || user?.isPremium;
 
   if (!hasAccess) {
-    await ctx.answerCallbackQuery({ text: '🔒 Спочатку придбай курс', show_alert: true }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: '🔒 Цей курс доступний тільки з Premium!', show_alert: true }).catch(() => {});
     return;
   }
 
+  let progress = await CourseProgress.findOne({ telegramId, courseSlug: slug });
   if (!progress) {
     progress = await CourseProgress.create({ telegramId, courseSlug: slug, currentLesson: 0 });
   }
@@ -405,84 +403,4 @@ export const handleCourseReminder = async (ctx: Context) => {
   await ctx.editMessageReplyMarkup({
     reply_markup: new InlineKeyboard().text('← До курсів', 'courses_list'),
   }).catch(() => {});
-};
-
-// ─── 10. Купівля ─────────────────────────────────────────────────────────────
-
-export const handleCourseBuy = async (ctx: Context) => {
-  await ctx.answerCallbackQuery().catch(() => {});
-  const telegramId = ctx.from?.id;
-  if (!telegramId) return;
-
-  const slug = ctx.callbackQuery?.data?.replace('course_buy_', '') ?? '';
-  const course = await Course.findOne({ slug, isPublished: true }).lean();
-  if (!course) return;
-
-  const existing = await CourseProgress.findOne({ telegramId, courseSlug: slug });
-  if (existing?.purchasedAt) {
-    await ctx.reply('✅ Ти вже маєш доступ до цього курсу!', {
-      reply_markup: new InlineKeyboard().text('📖 Відкрити', `course_open_${slug}`),
-    });
-    return;
-  }
-
-  const text =
-    `━━━━━━━━━━━━━━━━━━━\n💎 <b>КУПІВЛЯ КУРСУ</b>\n━━━━━━━━━━━━━━━━━━━\n\n` +
-    `Курс: <b>${e(course.title)}</b>\n` +
-    `Ціна: <b>${course.priceStars} Telegram Stars</b>\n\n` +
-    `Після оплати — постійний доступ до курсу.`;
-
-  const keyboard = new InlineKeyboard()
-    .text(`⭐ Оплатити ${course.priceStars}⭐`, `course_pay_${slug}`).row()
-    .text('✖ Скасувати', 'courses_list');
-
-  await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
-};
-
-// ─── 11. Інвойс ──────────────────────────────────────────────────────────────
-
-export const handleCoursePay = async (ctx: Context) => {
-  await ctx.answerCallbackQuery().catch(() => {});
-  const slug = ctx.callbackQuery?.data?.replace('course_pay_', '') ?? '';
-  const course = await Course.findOne({ slug }).lean();
-  if (!course) return;
-
-  await ctx.replyWithInvoice(
-    course.title,
-    course.description || `Повний доступ до курсу «${course.title}»`,
-    `course_${slug}_${ctx.from?.id}`,
-    'XTR',
-    [{ label: course.title, amount: course.priceStars }],
-  );
-};
-
-// ─── 12. Успішна оплата ───────────────────────────────────────────────────────
-
-export const handleCoursePaymentSuccess = async (ctx: Context) => {
-  const telegramId = ctx.from?.id;
-  const payment = ctx.message?.successful_payment;
-  if (!telegramId || !payment) return;
-
-  const payload = payment.invoice_payload;
-  if (!payload.startsWith('course_')) return;
-
-  const parts = payload.split('_');
-  const slug = parts.slice(1, -1).join('_');
-
-  await CourseProgress.findOneAndUpdate(
-    { telegramId, courseSlug: slug },
-    { purchasedAt: new Date(), currentLesson: 0 },
-    { upsert: true },
-  );
-
-  const course = await Course.findOne({ slug }).lean();
-  const courseTitle = course?.title ?? slug;
-
-  await ctx.reply(
-    `✅ <b>Оплата пройшла успішно!</b>\n\nКурс «<b>${e(courseTitle)}</b>» тепер доступний.`,
-    {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().text('📖 Відкрити курс', `course_open_${slug}`),
-    },
-  );
 };

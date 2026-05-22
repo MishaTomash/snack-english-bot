@@ -15,9 +15,9 @@ interface AdminCourseState {
   step: string;
   slug?: string;
   lessonIdx?: number;
-  testIdx?: number;     // для редагування конкретного тесту
-  exampleIdx?: number;  // для редагування конкретного прикладу
-  addedCount?: number;  // лічильник доданих елементів у сесії
+  testIdx?: number;     
+  exampleIdx?: number;  
+  addedCount?: number;  
 }
 
 export const adminCourseState = new Map<number, AdminCourseState>();
@@ -28,15 +28,17 @@ export const handleAdminCoursesList = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
 
-  const courses = await Course.find({}).lean();
+  // Сортуємо курси за датою, щоб бачити, який з них перший
+  const courses = await Course.find({}).sort({ createdAt: 1 }).lean();
 
   let text = `📚 <b>Управління курсами</b>\nВсього: <b>${courses.length}</b>\n\n`;
   const keyboard = new InlineKeyboard();
 
-  for (const c of courses) {
+  courses.forEach((c, index) => {
     const status = c.isPublished ? '✅' : '📝';
-    const price = c.priceStars === 0 ? 'Безкоштовно' : `${c.priceStars}⭐`;
-    text += `${status} <b>${e(c.title)}</b> — ${price} | ${c.lessons.length} уроків\n`;
+    const accessType = index === 0 ? 'Безкоштовно' : 'Premium 💎';
+    
+    text += `${status} <b>${e(c.title)}</b> — ${accessType} | ${c.lessons.length} уроків\n`;
     text += `   <code>${c.slug}</code>\n\n`;
 
     keyboard
@@ -44,7 +46,7 @@ export const handleAdminCoursesList = async (ctx: Context) => {
       .text(c.isPublished ? '🙈 Скрити' : '🚀 Опубл.', `adm_course_toggle_${c.slug}`)
       .text('🗑', `adm_course_del_${c.slug}`)
       .row();
-  }
+  });
 
   keyboard.text('➕ Новий курс', 'adm_course_new');
 
@@ -66,11 +68,11 @@ export const handleAdminCourseNew = async (ctx: Context) => {
   await ctx.editMessageText(
     `➕ <b>Новий курс</b>\n\n` +
     `Надішли у форматі:\n` +
-    `<code>course: slug | Назва | Ціна⭐ | Опис</code>\n\n` +
+    `<code>course: slug | Назва | Опис</code>\n\n` +
     `Приклади:\n` +
-    `<code>course: to_be | TO BE | 0 | Вивчи дієслово to be</code>\n` +
-    `<code>course: present_simple | Present Simple | 30 | Теперішній простий час</code>\n\n` +
-    `<i>Ціна 0 = безкоштовно</i>`,
+    `<code>course: to_be | TO BE | Вивчи дієслово to be</code>\n` +
+    `<code>course: present_simple | Present Simple | Теперішній простий час</code>\n\n` +
+    `<i>(Перший курс у базі буде безкоштовним, інші вимагатимуть Premium)</i>`,
     { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text('✖ Скасувати', 'adm_courses_list') },
   ).catch(() => {});
 };
@@ -86,7 +88,7 @@ export const handleAdminCourseEdit = async (ctx: Context) => {
   if (!course) return;
 
   let text = `✏️ <b>Курс: ${e(course.title)}</b>\n\n`;
-  text += `Slug: <code>${course.slug}</code> | Ціна: ${course.priceStars}⭐\n`;
+  text += `Slug: <code>${course.slug}</code>\n`;
   text += `Статус: ${course.isPublished ? '✅ Опублікований' : '📝 Чернетка'}\n\n`;
   text += `<b>Уроки (${course.lessons.length}):</b>\n`;
 
@@ -395,7 +397,6 @@ export const handleAdminExampleDelConfirm = async (ctx: Context) => {
   await course.save();
 
   await ctx.answerCallbackQuery({ text: '🗑 Видалено', show_alert: true }).catch(() => {});
-  // Оновлюємо список прикладів
   const fakeCtx = { ...ctx, callbackQuery: { ...ctx.callbackQuery, data: `adm_examples_list_${slug}_${lessonIdx}` } } as Context;
   await handleAdminExamplesList(fakeCtx);
 };
@@ -566,18 +567,16 @@ export const handleAdminCourseTextInbound = async (
   if (state.step === 'new_course' && text.startsWith('course:')) {
     const parts = text.replace('course:', '').trim().split('|').map((s) => s.trim());
     if (parts.length < 3) {
-      await ctx.reply('❌ Формат: <code>course: slug | Назва | Ціна | Опис</code>', { parse_mode: 'HTML' });
+      await ctx.reply('❌ Формат: <code>course: slug | Назва | Опис</code>', { parse_mode: 'HTML' });
       return;
     }
-    const [slug, title, priceRaw, description] = parts;
-    const priceStars = parseInt(priceRaw, 10);
-    if (isNaN(priceStars) || priceStars < 0) { await ctx.reply('❌ Ціна має бути числом ≥ 0'); return; }
+    const [slug, title, description] = parts;
     if (await Course.findOne({ slug })) { await ctx.reply(`❌ Slug <code>${slug}</code> вже існує`, { parse_mode: 'HTML' }); return; }
 
-    await Course.create({ slug, title, priceStars, description: description ?? '', isPublished: false });
+    await Course.create({ slug, title, description: description ?? '', isPublished: false });
     adminCourseState.delete(adminId);
     await ctx.reply(
-      `✅ <b>Курс створено!</b>\n\n«${e(title)}» | ${priceStars}⭐\n\nТепер додай уроки.`,
+      `✅ <b>Курс створено!</b>\n\n«${e(title)}»\n\nТепер додай уроки.`,
       { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text('✏️ Редагувати', `adm_course_edit_${slug}`) },
     );
     return;
@@ -702,6 +701,7 @@ export const handleAdminCourseTextInbound = async (
 
   return next();
 };
+
 export const handleForceMenuUpdate = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
 
@@ -714,21 +714,17 @@ export const handleForceMenuUpdate = async (ctx: Context) => {
 
     for (const user of users) {
       try {
-        // Використовуємо api.sendMessage, щоб жорстко передати mainKeyboard
         await ctx.api.sendMessage(
           user.telegramId,
           '🚀 <b>У SnackEnglish оновлення!</b>\n\nМи додали нові круті функції. Зверни увагу на нове меню внизу екрана! 👇',
           { 
             parse_mode: 'HTML',
-            reply_markup: createMainMenu() // <-- Магія оновлення відбувається тут!
+            reply_markup: createMainMenu() 
           }
         );
         successCount++;
-        
-        // Пауза 50мс для безпеки, щоб Telegram не заблокував за спам (ліміт ~30 повідомлень/сек)
         await new Promise((res) => setTimeout(res, 50));
       } catch (err) {
-        // Якщо користувач заблокував бота, потрапляємо сюди
         failCount++;
       }
     }
