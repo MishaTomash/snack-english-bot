@@ -46,6 +46,7 @@ import {
 } from './handlers/tests';
 import { handlePremiumPaymentSuccess } from './handlers/premium';
 import { handleTopMenu } from './handlers/rating';
+import { handleReferralMenu } from './handlers/referrals';
 
 export const bot = new Bot(config.BOT_TOKEN);
 bot.use(trackActivity);
@@ -172,3 +173,4 @@ bot.hears('⚙️ Налаштування', showSettings);
 bot.hears('🎓 Курси', handleCoursesList);
 bot.hears('🏆 Топ', handleTopMenu); // <-- ДОДАЙ ЦЕ
 bot.hears('🏆 Управління ТОПом', handleAdminTopMenu);
+bot.hears('👥 Запросити друзів', handleReferralMenu);

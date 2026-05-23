@@ -391,12 +391,11 @@ export const handleAdminTopEnd = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   await ctx.answerCallbackQuery();
 
-  // 1. Формуємо результати
+  // 1. Формуємо результати ТОПу
   const topUsers = await User.find({ isPremium: true, seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).limit(5).lean();
   let resultText = `🏆 <b>РЕЗУЛЬТАТИ СЕЗОНУ!</b>\n\n`;
   topUsers.forEach((u, i) => {
     const name = u.username ? `@${u.username}` : (u.firstName || 'Анонім');
-    // Обов'язково екрануємо імена, щоб символи "<" або ">" не зламали HTML
     resultText += `${i + 1}. ${escapeHtml(name)} - <b>${u.seasonXp}</b> балів\n`;
   });
 
@@ -404,10 +403,20 @@ export const handleAdminTopEnd = async (ctx: Context) => {
 
   await ctx.reply(resultText, { parse_mode: 'HTML' });
 
-  // 2. Скидаємо Premium та seasonXp всім користувачам!
-  await User.updateMany({}, { isPremium: false, premiumExpiresAt: null, seasonXp: 0 });
+  // 2. 🌟 ОНОВЛЕНО: Скидаємо ТОП-статистику ТА реферальний прогрес абсолютно всім користувачам!
+  await User.updateMany(
+    {}, 
+    { 
+      isPremium: false, 
+      premiumExpiresAt: null, 
+      seasonXp: 0,
+      referralCount: 0,                  // 👈 Скидаємо лічильник друзів на 0/3
+      referralRewardClaimed: false,       // 👈 Дозволяємо знову забрати Premium за друзів у новому сезоні
+      hasCompletedMinAction: false        // 👈 Анулюємо статус виконання дії для чистого старту
+    }
+  );
 
-  // 3. Запускаємо новий сезон
+  // 3. Запускаємо новий сезон у таблиці циклів
   const oldCycle = await TopCycle.findOne({ isActive: true });
   if (oldCycle) {
     oldCycle.isActive = false;
@@ -416,9 +425,19 @@ export const handleAdminTopEnd = async (ctx: Context) => {
 
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + 30);
-  await TopCycle.create({ seasonNumber: (oldCycle?.seasonNumber || 0) + 1, endDate: nextDate });
+  await TopCycle.create({ 
+    seasonNumber: (oldCycle?.seasonNumber || 0) + 1, 
+    endDate: nextDate,
+    isActive: true,
+    totalStars: 0 
+  });
 
-  await ctx.reply('✅ <b>Сезон завершено!</b>\nВсім користувачам анульовано Premium та скинуто бали сезону. Почався новий турнір!', { parse_mode: 'HTML' });
+  await ctx.reply(
+    '✅ <b>Сезон успішно завершено!</b>\n\n' +
+    'Усім користувачам анульовано старий Premium, скинуто бали сезону, а також ' +
+    '<b>обнулено реферальний прогрес (0/3)</b>, щоб вони могли знову кликати друзів і змагатися! 🚀', 
+    { parse_mode: 'HTML' }
+  );
 };
 
 // ЗНАЙДИ функцию handleAdminMessages і додай цей блок ПЕРЕД блоком розсилки (перед `if (adminState.get(adminId) !== 'waiting_for_broadcast') return next();`):

@@ -23,7 +23,7 @@ export const sendPremiumOffer = async (ctx: Context) => {
   const payload = 'premium_subscription';
   const providerToken = '';
   const currency = 'XTR' as any;
-  const prices: LabeledPrice[] = [{ label: 'SnackEnglish Premium', amount: 1 }];
+  const prices: LabeledPrice[] = [{ label: 'SnackEnglish Premium', amount: 30 }];
 
   await ctx.replyWithInvoice(title, description, payload, currency, prices, {
     provider_token: providerToken,

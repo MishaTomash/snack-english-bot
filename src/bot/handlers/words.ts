@@ -3,6 +3,7 @@ import { User } from '../../models/User';
 import { getRandomWords } from '../../services/wordService';
 import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
+import { checkAndRewardReferrer } from './referrals';
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
@@ -12,8 +13,8 @@ const DAILY_WORD_LIMIT = 10;
 
 const isSameUTCDay = (a: Date, b: Date): boolean =>
   a.getUTCFullYear() === b.getUTCFullYear() &&
-  a.getUTCMonth()    === b.getUTCMonth()    &&
-  a.getUTCDate()     === b.getUTCDate();
+  a.getUTCMonth() === b.getUTCMonth() &&
+  a.getUTCDate() === b.getUTCDate();
 
 // ─── Видача слова ─────────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ export const handleWords = async (ctx: Context) => {
   if (!telegramId) return;
 
   if (ctx.callbackQuery) {
-    await ctx.answerCallbackQuery().catch(() => {});
+    await ctx.answerCallbackQuery().catch(() => { });
   }
 
   try {
@@ -38,7 +39,7 @@ export const handleWords = async (ctx: Context) => {
     const isNewDay = !lastLearnDate || !isSameUTCDay(lastLearnDate, now);
 
     let wordsLearnedToday = user.wordsLearnedToday ?? 0;
-    let carriedOverWords  = user.carriedOverWords  ?? 0;
+    let carriedOverWords = user.carriedOverWords ?? 0;
 
     if (isNewDay) {
       const unused = DAILY_WORD_LIMIT - wordsLearnedToday;
@@ -79,7 +80,7 @@ export const handleWords = async (ctx: Context) => {
     }
 
     if (user.lastAudioMessageId && ctx.chat?.id) {
-      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => {});
+      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => { });
       await User.findByIdAndUpdate(user._id, { $set: { lastAudioMessageId: null } });
     }
 
@@ -87,6 +88,9 @@ export const handleWords = async (ctx: Context) => {
 
     if (!words || words.length === 0) {
       return ctx.reply('На жаль, для твого рівня поки немає слів у базі 😔');
+    }
+    if (user.wordsLearnedToday >= 5) {
+      await checkAndRewardReferrer(ctx, user.telegramId);
     }
 
     const word = words[0];
@@ -109,7 +113,7 @@ export const handleWords = async (ctx: Context) => {
         reply_markup: keyboard,
       }).catch(async (error: any) => {
         if (error?.description?.includes('message is not modified')) {
-          await ctx.answerCallbackQuery('Випало те ж саме слово! Тисни ще раз 😅').catch(() => {});
+          await ctx.answerCallbackQuery('Випало те ж саме слово! Тисни ще раз 😅').catch(() => { });
         }
       });
     } else {
@@ -125,12 +129,12 @@ export const handleWords = async (ctx: Context) => {
 
   } catch (error: any) {
     console.error('Помилка при видачі слів:', error);
-    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => {});
+    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => { });
   }
 };
 
 export const handleReminderTomorrow = async (ctx: Context) => {
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   const keyboard = new InlineKeyboard()
     .text('08:00', 'set_reminder_08:00')
@@ -151,7 +155,7 @@ export const handleSetReminder = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   const time = ctx.callbackQuery?.data?.replace('set_reminder_', '') ?? '10:00';
 
@@ -168,7 +172,7 @@ export const handleWordAudio = async (ctx: Context) => {
   const callbackData = ctx.callbackQuery?.data;
   if (!callbackData || !telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   const wordToPronounce = callbackData.substring('audio_'.length);
 
@@ -176,7 +180,7 @@ export const handleWordAudio = async (ctx: Context) => {
     const user = await User.findOne({ telegramId });
 
     if (user?.lastAudioMessageId && ctx.chat?.id) {
-      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => {});
+      await ctx.api.deleteMessage(ctx.chat.id, user.lastAudioMessageId).catch(() => { });
     }
 
     const audioUrl = getAudioUrl(wordToPronounce);

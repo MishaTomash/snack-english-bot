@@ -32,6 +32,10 @@ export interface IUser extends Document {
     seenTests: Schema.Types.ObjectId[];
     seenLearnedTests: Schema.Types.ObjectId[];
     seasonXp: number;
+    referredBy?: number;
+    referralCount: number;
+    referralRewardClaimed: boolean;
+    hasCompletedMinAction: boolean;
 }
 
 const UserSchema: Schema = new Schema({
@@ -59,8 +63,12 @@ const UserSchema: Schema = new Schema({
     seenWords: { type: [Schema.Types.ObjectId], default: [] },
     seenTexts: { type: [Schema.Types.ObjectId], default: [] },
     seenTests: { type: [Schema.Types.ObjectId], default: [] },
-    seenLearnedTests: { type: [Schema.Types.ObjectId], default: [] }, 
+    seenLearnedTests: { type: [Schema.Types.ObjectId], default: [] },
     seasonXp: { type: Number, default: 0 },
+    referredBy: { type: Number },
+    referralCount: { type: Number, default: 0 },
+    referralRewardClaimed: { type: Boolean, default: false },
+    hasCompletedMinAction: { type: Boolean, default: false },
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

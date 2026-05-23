@@ -1,13 +1,15 @@
 import { CommandContext, Context } from 'grammy';
 import { User } from '../../models/User';
-import { levelKeyboard } from '../keyboards/level'; 
+import { levelKeyboard } from '../keyboards/level';
 import { createMainMenu } from '../keyboards/main'; // 👈 ДОДАНО: імпорт твого головного меню
 
 export const handleStart = async (ctx: CommandContext<Context>) => {
   const telegramId = ctx.from?.id;
   const firstName = ctx.from?.first_name || 'Студент';
-  const username = ctx.from?.username; 
+  const username = ctx.from?.username;
 
+  const payload = ctx.match;
+  
   if (!telegramId) return;
 
   try {
@@ -15,11 +17,20 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
     let user = await User.findOne({ telegramId });
 
     if (!user) {
-      // Якщо новий користувач — створюємо запис ІЗ юзернеймом
-      user = new User({ 
-          telegramId, 
-          firstName, 
-          username 
+      // 👈 Перевіряємо, чи перейшов юзер за реферальним посиланням
+      let referredBy: number | undefined;
+      if (payload && typeof payload === 'string' && payload.startsWith('ref_')) {
+        const inviterId = parseInt(payload.replace('ref_', ''), 10);
+        // Забороняємо запрошувати самого себе
+        if (!isNaN(inviterId) && inviterId !== telegramId) {
+          referredBy = inviterId;
+        }
+      }
+      user = new User({
+        telegramId,
+        firstName,
+        username,
+        referredBy // 👈 Зберігаємо ID друга
       });
       await user.save();
 
@@ -39,7 +50,7 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
       } else {
         // 👈 ДОДАНО: прикріплюємо головне меню до привітання
         await ctx.reply(`З поверненням, ${firstName}! Твій рівень: ${user.level}. Готовий до нових слів? 🍪`, {
-            reply_markup: createMainMenu()
+          reply_markup: createMainMenu()
         });
       }
     }
