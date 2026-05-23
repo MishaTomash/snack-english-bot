@@ -209,20 +209,7 @@ export const handleTestAnswer = async (ctx: Context) => {
 
   if (!isCorrect) return;
 
-  if (source === 'general') {
-    const user = await User.findOne({ telegramId });
-    if (user?.isPremium) {
-      const wordToPronounce = ctx.callbackQuery?.message?.reply_markup?.inline_keyboard
-        .flat()
-        .find((btn) => 'callback_data' in btn && btn.callback_data === callbackData)?.text;
-
-      if (wordToPronounce) {
-        await ctx
-          .replyWithVoice(getAudioUrl(wordToPronounce), { caption: `🔊 Вимова: ${wordToPronounce}` })
-          .catch((err) => console.error('Помилка аудіо для тесту:', err));
-      }
-    }
-  }
+  // ❌ (БЛОК З ВІДПРАВКОЮ АУДІО ПОВНІСТЮ ВИДАЛЕНО ЗВІДСИ) ❌
 
   // Автоматичний перехід до наступного питання
   if (source === 'general') {

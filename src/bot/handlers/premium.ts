@@ -18,11 +18,11 @@ export const sendPremiumOffer = async (ctx: Context) => {
 
   if (ctx.callbackQuery) await ctx.answerCallbackQuery();
 
-  const title        = 'SnackEnglish Premium 💎';
-  const description  = 'Необмежене навчання (без денних лімітів), озвучка, складні тексти та розширена статистика!';
-  const payload      = 'premium_subscription';
+  const title = 'SnackEnglish Premium 💎';
+  const description = 'Необмежене навчання (без денних лімітів), озвучка, складні тексти та розширена статистика!';
+  const payload = 'premium_subscription';
   const providerToken = '';
-  const currency     = 'XTR' as any;
+  const currency = 'XTR' as any;
   const prices: LabeledPrice[] = [{ label: 'SnackEnglish Premium', amount: 1 }];
 
   await ctx.replyWithInvoice(title, description, payload, currency, prices, {
@@ -37,6 +37,7 @@ export const handlePreCheckoutQuery = async (ctx: Context) => {
 export const handlePremiumPaymentSuccess = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
+  const paidAmount = ctx.message?.successful_payment?.total_amount || 0;
 
   // Отримуємо поточний сезон
   let activeCycle = await TopCycle.findOne({ isActive: true });
@@ -45,6 +46,8 @@ export const handlePremiumPaymentSuccess = async (ctx: Context) => {
     defaultDate.setDate(defaultDate.getDate() + 30);
     activeCycle = await TopCycle.create({ endDate: defaultDate, seasonNumber: 1 });
   }
+  activeCycle.totalStars = (activeCycle.totalStars || 0) + paidAmount;
+  await activeCycle.save();
 
   await User.findOneAndUpdate(
     { telegramId },

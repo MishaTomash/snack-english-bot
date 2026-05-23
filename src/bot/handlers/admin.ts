@@ -6,7 +6,7 @@ import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
 import { Text } from '../../models/Text';
 import { User } from '../../models/User';
-import { TopCycle } from '../../models/TopCycle'; 
+import { TopCycle } from '../../models/TopCycle';
 
 // ─── Константи ───────────────────────────────────────────────────────────────
 
@@ -292,7 +292,7 @@ export const handleAdminStats = async (ctx: Context) => {
 
 export const handleAdminUsers = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
-  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
 
   try {
     const users = await User.find({}).lean();
@@ -311,7 +311,7 @@ export const handleAdminUsers = async (ctx: Context) => {
 
 export const handleAdminUsersPagination = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   const page = parseInt(ctx.callbackQuery?.data?.split('_')[2] ?? '', 10);
   if (isNaN(page)) return;
@@ -347,24 +347,39 @@ export const handleBroadcastStart = async (ctx: Context) => {
 
 export const handleAdminTopMenu = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
+
   let cycle = await TopCycle.findOne({ isActive: true });
   if (!cycle) {
-      const nextDate = new Date();
-      nextDate.setDate(nextDate.getDate() + 30);
-      cycle = await TopCycle.create({ endDate: nextDate, seasonNumber: 1 });
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + 30);
+    cycle = await TopCycle.create({ endDate: nextDate, seasonNumber: 1, totalStars: 0 });
   }
 
+  const premiumUsersCount = await User.countDocuments({ isPremium: true });
+
+  // Беремо СПРАВЖНЮ кількість зірок з бази даних (скільки реально заплатили люди)
+  const realTotalStars = cycle.totalStars || 0;
+
+  // Формула розрахунку реального прибутку. 
+  // Telegram виплачує розробникам 0.013 USD за 1 зірку (вже після комісії Apple/Google 30%). 
+  // При курсі ~40 грн/долар, це приблизно 0.52 грн чистого прибутку за 1 зірку.
+  const UAH_PER_STAR = 0.52;
+  const totalUah = Math.floor(realTotalStars * UAH_PER_STAR);
+
   const text = `🏆 <b>Управління ТОПом (Сезон ${cycle.seasonNumber})</b>\n\n` +
-               `📅 Дата завершення: <b>${cycle.endDate.toLocaleDateString('uk-UA')}</b>\n\n` +
-               `Оберіть дію:`;
-               
+    `📅 Дата завершення: <b>${cycle.endDate.toLocaleDateString('uk-UA')}</b>\n` +
+    `👥 Продано Premium цього сезону: <b>${premiumUsersCount}</b>\n\n` +
+    `📊 <b>Справжня фінансова статистика:</b>\n` +
+    `⭐ Отримано зірок: <b>${realTotalStars} XTR</b>\n` +
+    `💰 Ваш чистий прибуток: <b>~${totalUah} грн</b>\n\n` +
+    `Оберіть дію:`;
+
   const kb = new InlineKeyboard()
-      .text('📅 Змінити дату', 'adm_top_set_date').row()
-      .text('🛑 Завершити сезон зараз', 'adm_top_end');
-      
+    .text('📅 Змінити дату', 'adm_top_set_date').row()
+    .text('🛑 Завершити сезон зараз', 'adm_top_end');
+
   await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
 };
-
 export const handleAdminTopSetDatePrompt = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   await ctx.answerCallbackQuery();
@@ -375,18 +390,18 @@ export const handleAdminTopSetDatePrompt = async (ctx: Context) => {
 export const handleAdminTopEnd = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   await ctx.answerCallbackQuery();
-  
+
   // 1. Формуємо результати
   const topUsers = await User.find({ isPremium: true, seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).limit(5).lean();
   let resultText = `🏆 <b>РЕЗУЛЬТАТИ СЕЗОНУ!</b>\n\n`;
   topUsers.forEach((u, i) => {
-      const name = u.username ? `@${u.username}` : (u.firstName || 'Анонім');
-      // Обов'язково екрануємо імена, щоб символи "<" або ">" не зламали HTML
-      resultText += `${i+1}. ${escapeHtml(name)} - <b>${u.seasonXp}</b> балів\n`;
+    const name = u.username ? `@${u.username}` : (u.firstName || 'Анонім');
+    // Обов'язково екрануємо імена, щоб символи "<" або ">" не зламали HTML
+    resultText += `${i + 1}. ${escapeHtml(name)} - <b>${u.seasonXp}</b> балів\n`;
   });
-  
+
   if (topUsers.length === 0) resultText += `Ніхто не брав участі 😔`;
-  
+
   await ctx.reply(resultText, { parse_mode: 'HTML' });
 
   // 2. Скидаємо Premium та seasonXp всім користувачам!
@@ -395,10 +410,10 @@ export const handleAdminTopEnd = async (ctx: Context) => {
   // 3. Запускаємо новий сезон
   const oldCycle = await TopCycle.findOne({ isActive: true });
   if (oldCycle) {
-      oldCycle.isActive = false;
-      await oldCycle.save();
+    oldCycle.isActive = false;
+    await oldCycle.save();
   }
-  
+
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + 30);
   await TopCycle.create({ seasonNumber: (oldCycle?.seasonNumber || 0) + 1, endDate: nextDate });
