@@ -3,6 +3,7 @@ import { User } from '../../models/User';
 import { getRandomTest, getTestForLearnedWords, resetAndGetLearnedTest } from '../../services/testService';
 import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
+import { TestQuestion } from '../../models/TestQuestion';
 
 const escapeMarkdownV2 = (text: string): string =>
   text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
@@ -24,10 +25,10 @@ const buildTestKeyboard = (
   return keyboard;
 };
 
-const sendTestMessage = async (
+export const sendTestMessage = async (
   ctx: Context,
   testData: any,
-  source: TestSource,
+  source: TestSource, // 'general' або 'learned_words'
 ) => {
   const questionText = testData.question.replace(/___/g, '…');
   const safeQuestion = escapeMarkdownV2(questionText);
@@ -42,6 +43,11 @@ const sendTestMessage = async (
     testData.correctOptionIndex,
     source,
   );
+
+  // 👇 НОВЕ: Додаємо кнопку пояснення, якщо воно є в базі
+  if (testData.explanation) {
+    keyboard.row().text('💡 Пояснення', `explain_test_${testData._id}_${source}`);
+  }
 
   if (ctx.callbackQuery) {
     await ctx
@@ -172,7 +178,6 @@ export const handleLearnedTestRepeat = async (ctx: Context) => {
 };
 
 // ─── Обробка відповіді ────────────────────────────────────────────────────────
-// ─── Обробка відповіді ────────────────────────────────────────────────────────
 export const handleTestAnswer = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   const callbackData = ctx.callbackQuery?.data;
@@ -245,5 +250,59 @@ export const handleNextRepeatTest = async (ctx: Context) => {
     await sendTestMessage(ctx, result.test, 'repeat');
   } catch (error: any) {
     console.error('Помилка next_repeat_test:', error);
+  }
+};
+
+
+
+export const handleExplainTest = async (ctx: Context) => {
+  // Перевірка наявності match
+  if (!ctx.match || !ctx.match[1]) return;
+
+  // Розбиваємо дані: ID тесту та джерело (general або learned_words)
+  const matchData = (ctx.match[1] as string).split('_');
+  const testId = matchData[0];
+  const source = matchData[1] || 'general';
+  
+  try {
+    const test = await TestQuestion.findById(testId);
+    if (!test || !test.explanation) {
+      return ctx.answerCallbackQuery({ text: 'На жаль, пояснення не знайдено 😔', show_alert: true });
+    }
+
+    // Клавіатура для повернення назад (передаємо і ID, і source)
+    const backKeyboard = new InlineKeyboard().text('🔙 Назад до тесту', `back_to_test_${testId}_${source}`);
+
+    // Використовуємо HTML для пояснення, щоб уникнути помилок з Markdown
+    await ctx.editMessageText(
+      `💡 <b>Пояснення:</b>\n\n${test.explanation}`, 
+      { 
+        parse_mode: 'HTML',
+        reply_markup: backKeyboard 
+      }
+    ).catch(() => {});
+  } catch (err) {
+    console.error('Помилка показу пояснення:', err);
+  }
+};
+
+// 🔙 Хендлер для кнопки "Назад до тесту"
+export const handleBackToTest = async (ctx: Context) => {
+  if (!ctx.match || !ctx.match[1]) return;
+
+  const matchData = (ctx.match[1] as string).split('_');
+  const testId = matchData[0];
+  const source = matchData[1] as any || 'general';
+  
+  try {
+    const testData = await TestQuestion.findById(testId);
+    if (!testData) {
+      return ctx.answerCallbackQuery({ text: 'Тест не знайдено', show_alert: true });
+    }
+
+    // Викликаємо твою ж функцію генерації тесту!
+    await sendTestMessage(ctx, testData, source);
+  } catch (err) {
+    console.error('Помилка повернення до тесту:', err);
   }
 };

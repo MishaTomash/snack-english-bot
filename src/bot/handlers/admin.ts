@@ -13,7 +13,7 @@ import { TopCycle } from '../../models/TopCycle';
 const ALLOWED_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 type Level = typeof ALLOWED_LEVELS[number];
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 // ─── Стан для розсилки ───────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ const buildUsersPage = (
   for (let i = start; i < end; i++) {
     const u = users[i];
     const level = u.level ?? 'Не обрано';
-    const name = escapeHtml(u.firstName ?? 'Анонім');
+    const name = u.firstName ? escapeHtml(u.firstName) : 'Анонім';
     const username = u.username ? ` (@${u.username})` : '';
     text += `${i + 1}. <b>${name}</b>${username} | <code>${u.telegramId}</code> | ${level}\n`;
   }
@@ -96,8 +96,9 @@ export const handleAddWordPrompt = async (ctx: Context) => {
 export const handleAddTestPrompt = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   await ctx.reply(
-    '🎯 *Шаблон для додавання окремого міні-тесту:*\n\n`test: A1 | Як буде "вода"? | school, water, window, bread | water`',
-    { parse_mode: 'Markdown' },
+    '🎯 *Шаблон для додавання міні-тесту (можна кидати одразу кілька рядків):*\n\n' +
+    '`test: A1 | Як буде "вода"? | school, water, window, bread | water | Water перекладається як вода.`',
+    { parse_mode: 'Markdown' }
   );
 };
 
@@ -118,18 +119,20 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
   if (!textData) return next();
 
   // ── 1. СЛОВО (з опціональним прив'язаним тестом) ─────────────────────────
-  if (textData.startsWith('word:')) {
+if (textData.startsWith('word:')) {
     try {
       const parts = textData.replace('word:', '').trim().split('|').map((s) => s.trim());
 
+      // Трохи оновив текст помилки, щоб адмін знав про 8-ме поле
       if (parts.length < 4) {
         return ctx.reply(
-          '❌ Потрібно мінімум 4 поля:\n`word: рівень | англ | укр | транскрипція`\n\nАбо 7 полів для слова + тест:\n`word: рівень | англ | укр | транскрипція | питання | варіанти | правильна`',
+          '❌ Потрібно мінімум 4 поля:\n`word: рівень | англ | укр | транскрипція`\n\nАбо 7-8 полів для слова + тест:\n`word: рівень | англ | укр | транскр | питання | варіанти | правильна | пояснення (необов.)`',
           { parse_mode: 'Markdown' },
         );
       }
 
-      const [inputLevel, english, ukrainian, transcription, question, rawOptions, correctAnswerText] = parts;
+      // 👇 ДОДАНО: витягуємо explanation як 8-й елемент
+      const [inputLevel, english, ukrainian, transcription, question, rawOptions, correctAnswerText, explanation] = parts;
 
       if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
         return ctx.reply(
@@ -162,11 +165,12 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
             );
           } else {
             await TestQuestion.create({
-              level: inputLevel as Level,
+              level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2', // Явне приведення типу
               question,
               options,
               correctOptionIndex,
               wordId: newWord._id,  // 🔗 Прив'язка до слова
+              explanation: explanation ? explanation : undefined // 👈 ДОДАНО: записуємо пояснення
             });
             testSaved = true;
           }
@@ -186,32 +190,61 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
   }
 
   // ── 2. ТЕСТ (загальний, без прив'язки до слова) ───────────────────────────
-  if (textData.startsWith('test:')) {
+  if (textData.includes('test:')) {
     try {
-      const parts = textData.replace('test:', '').trim().split('|').map((s) => s.trim());
-      if (parts.length < 4) {
-        return ctx.reply(
-          '❌ Потрібно 4 поля: `test: рівень | питання | варіанти через кому | правильна відповідь`',
-          { parse_mode: 'Markdown' },
-        );
+      // Розбиваємо весь текст на рядки і беремо тільки ті, що починаються на 'test:'
+      const lines = textData.split('\n').filter(line => line.trim().startsWith('test:'));
+
+      let addedCount = 0;
+      let errors: string[] = [];
+
+      for (const line of lines) {
+        const parts = line.replace('test:', '').trim().split('|').map((s) => s.trim());
+
+        // Перевіряємо чи є хоча б 4 поля (пояснення - 5-те, воно не обов'язкове)
+        if (parts.length < 4) {
+          errors.push(`❌ Мало полів: ${line}`);
+          continue;
+        }
+
+        const [inputLevel, question, rawOptions, correctAnswerText, explanation] = parts;
+
+        if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(inputLevel)) {
+          errors.push(`❌ Невідомий рівень (${inputLevel}): ${line}`);
+          continue;
+        }
+
+        const options = rawOptions.split(',').map((s) => s.trim());
+        if (options.length < 2) {
+          errors.push(`❌ Мало варіантів: ${line}`);
+          continue;
+        }
+
+        const correctOptionIndex = options.indexOf(correctAnswerText);
+        if (correctOptionIndex === -1) {
+          errors.push(`❌ Відповідь '${correctAnswerText}' не знайдена: ${line}`);
+          continue;
+        }
+
+        // Створюємо тест, додаємо пояснення якщо воно є
+
+        await TestQuestion.create({
+          level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2', // 👈 Явно вказуємо тип для TypeScript
+          question,
+          options,
+          correctOptionIndex,
+          explanation: explanation ? explanation : undefined // 👈 Передаємо undefined замість null
+        });
+
+        addedCount++;
       }
-      const [inputLevel, question, rawOptions, correctAnswerText] = parts;
-      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
-        return ctx.reply(`❌ Невідомий рівень: *${inputLevel}*`, { parse_mode: 'Markdown' });
+
+      let replyText = `✅ *Успішно додано тестів: ${addedCount}*\n`;
+      if (errors.length > 0) {
+        replyText += `\n⚠️ *Помилки в таких рядках:*\n${errors.join('\n')}`;
       }
-      const options = rawOptions.split(',').map((s) => s.trim());
-      if (options.length < 2) {
-        return ctx.reply('❌ Потрібно хоча б 2 варіанти відповідей.', { parse_mode: 'Markdown' });
-      }
-      const correctOptionIndex = options.indexOf(correctAnswerText);
-      if (correctOptionIndex === -1) {
-        return ctx.reply(
-          `❌ Правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів: \`${options.join(', ')}\``,
-          { parse_mode: 'Markdown' },
-        );
-      }
-      await TestQuestion.create({ level: inputLevel as Level, question, options, correctOptionIndex });
-      return ctx.reply('✅ *Загальний міні-тест успішно додано!*', { parse_mode: 'Markdown' });
+
+      return ctx.reply(replyText, { parse_mode: 'Markdown' });
     } catch (error) {
       console.error('Помилка додавання тесту:', error);
       return ctx.reply('❌ Помилка при збереженні тесту.');
@@ -295,7 +328,8 @@ export const handleAdminUsers = async (ctx: Context) => {
   if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
 
   try {
-    const users = await User.find({}).lean();
+    // Оптимізація: завантажуємо ЛИШЕ необхідні поля для списку (економимо пам'ять сервера)
+    const users = await User.find({}).select('firstName username telegramId level').lean();
     if (users.length === 0) {
       return ctx.reply('📭 У боті поки немає зареєстрованих користувачів.');
     }
@@ -405,10 +439,10 @@ export const handleAdminTopEnd = async (ctx: Context) => {
 
   // 2. 🌟 ОНОВЛЕНО: Скидаємо ТОП-статистику ТА реферальний прогрес абсолютно всім користувачам!
   await User.updateMany(
-    {}, 
-    { 
-      isPremium: false, 
-      premiumExpiresAt: null, 
+    {},
+    {
+      isPremium: false,
+      premiumExpiresAt: null,
       seasonXp: 0,
       referralCount: 0,                  // 👈 Скидаємо лічильник друзів на 0/3
       referralRewardClaimed: false,       // 👈 Дозволяємо знову забрати Premium за друзів у новому сезоні
@@ -425,17 +459,17 @@ export const handleAdminTopEnd = async (ctx: Context) => {
 
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + 30);
-  await TopCycle.create({ 
-    seasonNumber: (oldCycle?.seasonNumber || 0) + 1, 
+  await TopCycle.create({
+    seasonNumber: (oldCycle?.seasonNumber || 0) + 1,
     endDate: nextDate,
     isActive: true,
-    totalStars: 0 
+    totalStars: 0
   });
 
   await ctx.reply(
     '✅ <b>Сезон успішно завершено!</b>\n\n' +
     'Усім користувачам анульовано старий Premium, скинуто бали сезону, а також ' +
-    '<b>обнулено реферальний прогрес (0/3)</b>, щоб вони могли знову кликати друзів і змагатися! 🚀', 
+    '<b>обнулено реферальний прогрес (0/3)</b>, щоб вони могли знову кликати друзів і змагатися! 🚀',
     { parse_mode: 'HTML' }
   );
 };
@@ -479,7 +513,8 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
     await ctx.reply('⏳ Починаю розсилку...');
 
     try {
-      const users = await User.find({}).lean();
+      // Оптимізація: завантажуємо ЛИШЕ telegramId (економить пам'ять)
+      const users = await User.find({}).select('telegramId').lean();
       let successCount = 0;
       let failCount = 0;
 
@@ -487,9 +522,13 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
         try {
           await ctx.copyMessage(user.telegramId);
           successCount++;
-          await new Promise((res) => setTimeout(res, 50));
-        } catch {
+        } catch (err) {
+          // Юзер заблокував бота або видалив чат
           failCount++;
+        } finally {
+          // ⚠️ НАЙВАЖЛИВІШЕ: Пауза ПОВИННА бути тут. 
+          // Вона спрацює навіть якщо юзер заблокував бота!
+          await new Promise((res) => setTimeout(res, 50));
         }
       }
 

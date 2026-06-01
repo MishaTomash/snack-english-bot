@@ -9,10 +9,11 @@ import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
 import { sendPremiumOffer } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
+import { TestQuestion } from '../models/TestQuestion';
 import {
   handleAdminCommand, handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,
   handleAddTextPrompt, handleAdminTextInbound, handleAdminUsers, handleAdminUsersPagination,
-  handleAdminMessages, handleAdminStats, handleBroadcastStart, handleAdminTopMenu, 
+  handleAdminMessages, handleAdminStats, handleBroadcastStart, handleAdminTopMenu,
   handleAdminTopSetDatePrompt, handleAdminTopEnd,
 } from './handlers/admin';
 import { handleSavedWords, handleNextSavedWord, handleDeleteSavedWord, handleSaveWord } from './handlers/saved';
@@ -43,12 +44,37 @@ import {
   handleTestAnswer,
   handleLearnedTestRepeat,
   handleNextRepeatTest,
+  handleExplainTest,
+  handleBackToTest
 } from './handlers/tests';
 import { handlePremiumPaymentSuccess } from './handlers/premium';
 import { handleTopMenu } from './handlers/rating';
 import { handleReferralMenu } from './handlers/referrals';
 
 export const bot = new Bot(config.BOT_TOKEN);
+
+// 1️⃣ Ловимо кліки по INLINE-кнопках (під повідомленнями)
+bot.on('callback_query:data', async (ctx, next) => {
+  const data = ctx.callbackQuery.data;
+  const user = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+  const time = new Date().toLocaleTimeString('uk-UA'); // Отримуємо час у форматі 14:35:22
+  
+  console.log(`[${time}] 📥 [Inline Клік]: [${data}] від юзера: ${user}`);
+  
+  await next(); 
+});
+
+// 2️⃣ Ловимо кліки по REPLY-кнопках (нижнє меню) та просто тексти
+bot.on('message:text', async (ctx, next) => {
+  const text = ctx.message.text;
+  const user = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+  const time = new Date().toLocaleTimeString('uk-UA'); // Отримуємо час у форматі 14:35:22
+  
+  console.log(`[${time}] 💬 [Меню / Текст]: [${text}] від юзера: ${user}`);
+  
+  await next(); 
+});
+
 bot.use(trackActivity);
 
 // ─── Команди ──────────────────────────────────────────────────────────────────
@@ -77,6 +103,8 @@ bot.callbackQuery('buy_premium', sendPremiumOffer);
 bot.callbackQuery('change_level', handleChangeLevelClick);
 bot.callbackQuery(/^set_reminder_/, handleSetReminder);
 bot.callbackQuery(/^answer_/, handleTestAnswer);
+bot.callbackQuery(/^explain_test_(.+)$/, handleExplainTest);
+bot.callbackQuery(/^back_to_test_(.+)$/, handleBackToTest);
 
 bot.callbackQuery('reminder_tomorrow', handleReminderTomorrow);
 
@@ -130,10 +158,10 @@ bot.callbackQuery('adm_top_end', handleAdminTopEnd);
 bot.on('pre_checkout_query', handlePreCheckout);
 bot.on('message:successful_payment', async (ctx) => {
   const payload = ctx.message?.successful_payment?.invoice_payload ?? '';
-  
+
   if (payload === 'premium_subscription') {
     // 1. Якщо купили Преміум
-    await handlePremiumPaymentSuccess(ctx); 
+    await handlePremiumPaymentSuccess(ctx);
   } else {
     // 2. Якщо це донат (Підтримка бота)
     await handleSuccessfulPayment(ctx);
@@ -147,6 +175,8 @@ bot.on('message:text', async (ctx, next) => {
   });
 });
 bot.on('message', handleAdminMessages);
+
+
 
 // ─── Кнопки головного меню ───────────────────────────────────────────────────
 
@@ -174,3 +204,18 @@ bot.hears('🎓 Курси', handleCoursesList);
 bot.hears('🏆 Топ', handleTopMenu); // <-- ДОДАЙ ЦЕ
 bot.hears('🏆 Управління ТОПом', handleAdminTopMenu);
 bot.hears('👥 Запросити друзів', handleReferralMenu);
+
+
+bot.command('cleargeneral', async (ctx) => {
+
+
+
+  try {
+    const result = await TestQuestion.deleteMany({ wordId: null });
+
+    await ctx.reply(`✅ Успішно видалено неправильних загальних тестів: *${result.deletedCount}* шт.\n\nУсі тести, що прив'язані до слів, залишилися в безпеці! 🛡️`, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Помилка при очищенні бази тестів:', error);
+    await ctx.reply('❌ Сталася помилка при видаленні.');
+  }
+});

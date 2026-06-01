@@ -708,7 +708,8 @@ export const handleForceMenuUpdate = async (ctx: Context) => {
   await ctx.reply('⏳ Починаю розсилку оновленого меню всім користувачам. Це може зайняти трохи часу...');
 
   try {
-    const users = await User.find({}).lean();
+    // Оптимізація: витягуємо тільки telegramId
+    const users = await User.find({}).select('telegramId').lean();
     let successCount = 0;
     let failCount = 0;
 
@@ -716,16 +717,18 @@ export const handleForceMenuUpdate = async (ctx: Context) => {
       try {
         await ctx.api.sendMessage(
           user.telegramId,
-          '🚀 <b>У SnackEnglish оновлення!</b>\n\nМи додали нові круті функції. Зверни увагу на нове меню внизу екрана! 👇',
+          "Меню оновлено 🍪",
           { 
             parse_mode: 'HTML',
-            reply_markup: createMainMenu() 
+            reply_markup: createMainMenu() // Переконайся, що функція імпортована
           }
         );
         successCount++;
-        await new Promise((res) => setTimeout(res, 50));
       } catch (err) {
         failCount++;
+      } finally {
+        // ⚠️ Гарантована затримка для захисту від ECONNRESET
+        await new Promise((res) => setTimeout(res, 50));
       }
     }
 

@@ -36,6 +36,8 @@ export interface IUser extends Document {
     referralCount: number;
     referralRewardClaimed: boolean;
     hasCompletedMinAction: boolean;
+    isBlocked: boolean;
+    lastRemindedAt: Date;
 }
 
 const UserSchema: Schema = new Schema({
@@ -69,6 +71,8 @@ const UserSchema: Schema = new Schema({
     referralCount: { type: Number, default: 0 },
     referralRewardClaimed: { type: Boolean, default: false },
     hasCompletedMinAction: { type: Boolean, default: false },
+    isBlocked: { type: Boolean, default: false },
+    lastRemindedAt: { type: Date }
 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
