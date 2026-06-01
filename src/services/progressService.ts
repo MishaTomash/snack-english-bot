@@ -22,7 +22,7 @@ export const updateUserProgress = async (
     activityType: 'word' | 'test' | 'text', 
     itemId?: string
 ) => {
-    // 1. Отримуємо лише поточний стан дат для розрахунку лімітів (Read-only)
+    // 1. Отримуємо поточний стан (Read-only)
     const user = await User.findOne({ telegramId }).lean();
     if (!user) return { gainedXp: 0, totalXp: 0, streak: 0 };
 
@@ -37,12 +37,12 @@ export const updateUserProgress = async (
 
     let streakBonusXp = 0;
     let newStreak = user.streak || 0;
-    let resetWordsLearnedToday = false;
+    let isNewDayForActivity = false;
 
     // 2. Логіка Вогників
     if (!lastActivityDay) {
         newStreak = 1;
-        resetWordsLearnedToday = true;
+        isNewDayForActivity = true;
         streakBonusXp = 10;
     } else {
         const diffTime = today.getTime() - lastActivityDay.getTime();
@@ -50,11 +50,11 @@ export const updateUserProgress = async (
 
         if (diffDays === 1) {
             newStreak += 1;
-            resetWordsLearnedToday = true;
+            isNewDayForActivity = true;
             streakBonusXp = 10 * newStreak;
         } else if (diffDays > 1) {
             newStreak = 1;
-            resetWordsLearnedToday = true;
+            isNewDayForActivity = true;
             streakBonusXp = 10;
         }
     }
@@ -67,36 +67,50 @@ export const updateUserProgress = async (
         $inc: {}
     };
 
-    if (resetWordsLearnedToday) {
+    if (isNewDayForActivity) {
+        // За замовчуванням скидаємо слова
         updateOps.$set.wordsLearnedToday = 0;
     }
 
+    // 4. Логіка нарахування по типах активності
     if (activityType === 'word' && itemId) {
         const alreadyLearned = user.learnedWordIds?.includes(itemId);
         if (!alreadyLearned) {
             gainedXp = 5;
             updateOps.$addToSet = { learnedWordIds: itemId };
-            updateOps.$inc.wordsLearnedToday = 1;
             updateOps.$inc.wordsLearned = 1;
+
+            // ✅ ВИПРАВЛЕННЯ: Щоб уникнути конфлікту $set та $inc для одного поля
+            if (isNewDayForActivity) {
+                updateOps.$set.wordsLearnedToday = 1; // Встановлюємо жорстко, якщо це перше слово за день
+            } else {
+                updateOps.$inc.wordsLearnedToday = 1; // Інкремент, якщо день той самий
+            }
         }
     } 
     else if (activityType === 'test') {
         updateOps.$inc.testsPassed = 1;
         
         const lastTestDay = user.lastTestXpDate ? new Date(user.lastTestXpDate.getFullYear(), user.lastTestXpDate.getMonth(), user.lastTestXpDate.getDate()) : null;
-        let currentTestXp = user.testXpEarnedToday || 0;
+        const isNewTestDay = !lastTestDay || lastTestDay.getTime() !== today.getTime();
 
-        if (!lastTestDay || lastTestDay.getTime() !== today.getTime()) {
-            currentTestXp = 0;
+        if (isNewTestDay) {
             updateOps.$set.lastTestXpDate = now;
-            updateOps.$set.testXpEarnedToday = 0; // Скидаємо ліміт у базі
         }
 
+        let currentTestXp = isNewTestDay ? 0 : (user.testXpEarnedToday || 0);
+
         if (currentTestXp + 10 <= 200) {
-            gainedXp = 5; // Загалом даємо 5XP користувачу (як у твоєму старому коді)
-            updateOps.$inc.testXpEarnedToday = 10; // Але ліміт рахуємо по 10
-        } else {
-            gainedXp = 0;
+            gainedXp = 5; 
+            
+            // ✅ ВИПРАВЛЕННЯ: Уникаємо конфлікту
+            if (isNewTestDay) {
+                updateOps.$set.testXpEarnedToday = 10; // Це перший тест за день
+            } else {
+                updateOps.$inc.testXpEarnedToday = 10; // Додаємо до існуючого прогресу
+            }
+        } else if (isNewTestDay) {
+            updateOps.$set.testXpEarnedToday = 0;
         }
     }
     else if (activityType === 'text') {
@@ -110,14 +124,14 @@ export const updateUserProgress = async (
         updateOps.$inc.seasonXp = totalGainedThisTurn;
     }
 
-    // Якщо немає інкрементів, видаляємо об'єкт $inc, щоб MongoDB не сварилася
+    // Підчищаємо пусті об'єкти, щоб MongoDB не сварилася
     if (Object.keys(updateOps.$inc).length === 0) delete updateOps.$inc;
 
-    // 4. ЄДИНИЙ запис у базу з атомарними модифікаторами
+    // 5. Запис у базу
     const updatedUser = await User.findOneAndUpdate(
         { telegramId },
         updateOps,
-        { new: true } // Повертає оновлений документ
+        { returnDocument: 'after' } // ✅ ВИПРАВЛЕННЯ: Замінив { new: true } згідно з новими вимогами Mongoose
     );
     
     return { 
