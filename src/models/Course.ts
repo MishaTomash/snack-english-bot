@@ -54,4 +54,7 @@ const CourseSchema = new Schema<ICourse>(
   { timestamps: true },
 );
 
+// ✅ ОПТИМІЗАЦІЯ: Індекс для швидкого виведення опублікованих курсів у правильному порядку
+CourseSchema.index({ isPublished: 1, createdAt: 1 });
+
 export const Course = mongoose.model<ICourse>('Course', CourseSchema);

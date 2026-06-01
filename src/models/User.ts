@@ -8,25 +8,21 @@ export interface IUser extends Document {
     wordsLearned?: number;
     testsPassed?: number;
     xp: number;
-    // Freemium 💎
     isPremium: boolean;
     premiumExpiresAt?: Date;
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
-    // Carry-over невивчених слів
     carriedOverWords: number;
-    // Нагадування
     reminderTime?: string;
     lastActivityDate?: Date;
-    // Анти-накрутка тестів 🛡️
     testXpEarnedToday: number;
     lastTestXpDate?: Date;
-    // Чищення аудіо-спаму
     lastAudioMessageId?: number | null;
     learnedWordIds?: string[];
     savedWords: mongoose.Types.ObjectId[];
     username?: string;
     firstName?: string;
+    // ⚠️ Увага: Ці масиви з часом треба буде винести в окрему колекцію або Redis
     seenWords: Schema.Types.ObjectId[];
     seenTexts: Schema.Types.ObjectId[];
     seenTests: Schema.Types.ObjectId[];
@@ -74,5 +70,11 @@ const UserSchema: Schema = new Schema({
     isBlocked: { type: Boolean, default: false },
     lastRemindedAt: { type: Date }
 });
+
+// ✅ ОПТИМІЗАЦІЯ: Складені індекси для швидких запитів
+UserSchema.index({ isPremium: 1, seasonXp: -1 }); // Миттєва генерація ТОПу
+UserSchema.index({ reminderTime: 1 }); // Швидкий пошук для крону нагадування слів
+UserSchema.index({ isPremium: 1, premiumExpiresAt: 1 }); // Швидкий пошук для крону Premium
+UserSchema.index({ lastActive: 1, isBlocked: 1, lastRemindedAt: 1 }); // Швидкий пошук для крону активності
 
 export const User = mongoose.model<IUser>('User', UserSchema);

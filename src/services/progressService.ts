@@ -16,13 +16,14 @@ export const getRankInfo = (xp: number) => {
     return current;
 };
 
-// ─── Основна логіка нарахування прогресу ─────────────────────────────────────
+// ─── Основна логіка нарахування прогресу (Атомарна) ─────────────────────────
 export const updateUserProgress = async (
     telegramId: number, 
     activityType: 'word' | 'test' | 'text', 
     itemId?: string
 ) => {
-    const user = await User.findOne({ telegramId });
+    // 1. Отримуємо лише поточний стан дат для розрахунку лімітів (Read-only)
+    const user = await User.findOne({ telegramId }).lean();
     if (!user) return { gainedXp: 0, totalXp: 0, streak: 0 };
 
     const now = new Date();
@@ -35,70 +36,93 @@ export const updateUserProgress = async (
     }
 
     let streakBonusXp = 0;
+    let newStreak = user.streak || 0;
+    let resetWordsLearnedToday = false;
 
-    // 1. ЛОГІКА ВОГНИКІВ (STREAK)
+    // 2. Логіка Вогників
     if (!lastActivityDay) {
-        user.streak = 1;
-        user.wordsLearnedToday = 0;
-        streakBonusXp = 10; // Бонус за перший день
+        newStreak = 1;
+        resetWordsLearnedToday = true;
+        streakBonusXp = 10;
     } else {
         const diffTime = today.getTime() - lastActivityDay.getTime();
         const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
 
         if (diffDays === 1) {
-            user.streak = (user.streak || 0) + 1;
-            user.wordsLearnedToday = 0; 
-            streakBonusXp = 10 * user.streak; // +10 XP * кількість днів!
+            newStreak += 1;
+            resetWordsLearnedToday = true;
+            streakBonusXp = 10 * newStreak;
         } else if (diffDays > 1) {
-            user.streak = 1; 
-            user.wordsLearnedToday = 0;
-            streakBonusXp = 10; // Знову 1-й день
+            newStreak = 1;
+            resetWordsLearnedToday = true;
+            streakBonusXp = 10;
         }
     }
-
-    user.lastActivityDate = now;
 
     let gainedXp = 0;
+    
+    // 3. Підготовка атомарної операції
+    const updateOps: any = {
+        $set: { lastActivityDate: now, streak: newStreak },
+        $inc: {}
+    };
 
-    // 2. НАРАХУВАННЯ СЛІВ ТА XP
+    if (resetWordsLearnedToday) {
+        updateOps.$set.wordsLearnedToday = 0;
+    }
+
     if (activityType === 'word' && itemId) {
-        if (!user.learnedWordIds) user.learnedWordIds = [];
-        if (!user.learnedWordIds.includes(itemId)) {
-            user.learnedWordIds.push(itemId);
-            user.wordsLearned = user.learnedWordIds.length;
-            user.wordsLearnedToday = (user.wordsLearnedToday || 0) + 1;
-            
-            gainedXp = 5; // +5 XP за нове слово
+        const alreadyLearned = user.learnedWordIds?.includes(itemId);
+        if (!alreadyLearned) {
+            gainedXp = 5;
+            updateOps.$addToSet = { learnedWordIds: itemId };
+            updateOps.$inc.wordsLearnedToday = 1;
+            updateOps.$inc.wordsLearned = 1;
         }
     } 
-    // 3. АНТИ-НАКРУТКА ДЛЯ ТЕСТІВ (Макс 200 XP на день)
     else if (activityType === 'test') {
-        user.testsPassed = (user.testsPassed || 0) + 1;
+        updateOps.$inc.testsPassed = 1;
         
         const lastTestDay = user.lastTestXpDate ? new Date(user.lastTestXpDate.getFullYear(), user.lastTestXpDate.getMonth(), user.lastTestXpDate.getDate()) : null;
+        let currentTestXp = user.testXpEarnedToday || 0;
+
         if (!lastTestDay || lastTestDay.getTime() !== today.getTime()) {
-            user.testXpEarnedToday = 0;
-            user.lastTestXpDate = now;
+            currentTestXp = 0;
+            updateOps.$set.lastTestXpDate = now;
+            updateOps.$set.testXpEarnedToday = 0; // Скидаємо ліміт у базі
         }
 
-        if ((user.testXpEarnedToday || 0) + 10 <= 200) {
-            gainedXp = 5; // +10 XP за тест
-            user.testXpEarnedToday = (user.testXpEarnedToday || 0) + 10;
+        if (currentTestXp + 10 <= 200) {
+            gainedXp = 5; // Загалом даємо 5XP користувачу (як у твоєму старому коді)
+            updateOps.$inc.testXpEarnedToday = 10; // Але ліміт рахуємо по 10
         } else {
-            gainedXp = 0; // Ліміт досягнуто
+            gainedXp = 0;
         }
     }
-    // 4. ТЕКСТИ
     else if (activityType === 'text') {
-        gainedXp = 30; // +30 XP за текст
+        gainedXp = 30;
     }
-
 
     const totalGainedThisTurn = gainedXp + streakBonusXp;
-    user.xp = (user.xp || 0) + totalGainedThisTurn;
-    user.seasonXp = (user.seasonXp || 0) + totalGainedThisTurn; // <--- ДОДАТИ ЦЕЙ РЯДОК
 
-    await user.save();
+    if (totalGainedThisTurn > 0) {
+        updateOps.$inc.xp = totalGainedThisTurn;
+        updateOps.$inc.seasonXp = totalGainedThisTurn;
+    }
+
+    // Якщо немає інкрементів, видаляємо об'єкт $inc, щоб MongoDB не сварилася
+    if (Object.keys(updateOps.$inc).length === 0) delete updateOps.$inc;
+
+    // 4. ЄДИНИЙ запис у базу з атомарними модифікаторами
+    const updatedUser = await User.findOneAndUpdate(
+        { telegramId },
+        updateOps,
+        { new: true } // Повертає оновлений документ
+    );
     
-    return { gainedXp: totalGainedThisTurn, totalXp: user.xp, streak: user.streak };
+    return { 
+        gainedXp: totalGainedThisTurn, 
+        totalXp: updatedUser?.xp || 0, 
+        streak: updatedUser?.streak || 0 
+    };
 };

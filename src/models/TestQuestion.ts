@@ -6,7 +6,7 @@ export interface ITestQuestion extends Document {
   correctOptionIndex: number;
   level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   wordId?: mongoose.Types.ObjectId;
-  explanation?: string; // 👈 ДОДАНО: необов'язкове поле для пояснення
+  explanation?: string;
 }
 
 const TestQuestionSchema: Schema = new Schema({
@@ -15,10 +15,10 @@ const TestQuestionSchema: Schema = new Schema({
   correctOptionIndex: { type: Number, required: true },
   level:              { type: String, enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'], required: true },
   wordId:             { type: Schema.Types.ObjectId, ref: 'Word', default: null },
-  explanation:        { type: String, default: null }, // 👈 ДОДАНО
+  explanation:        { type: String, default: null },
 });
 
-// Індекс для швидкого пошуку тестів за wordId
-TestQuestionSchema.index({ wordId: 1 });
+// ✅ ОПТИМІЗАЦІЯ: Складений індекс. Прискорює запит { level: 'A1', wordId: null } у десятки разів
+TestQuestionSchema.index({ level: 1, wordId: 1 });
 
 export const TestQuestion = mongoose.model<ITestQuestion>('TestQuestion', TestQuestionSchema);
