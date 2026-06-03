@@ -1,0 +1,49 @@
+name: Deploy Bot to Hetzner
+
+on:
+  push:
+    branches:
+      - main # перевір, чи твоя головна гілка називається саме main, якщо master — зміни на master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-level: '20'
+
+      # Якщо твій бот написаний на TypeScript, тут відбувається збирання проекту перед відправкою
+      - name: Install dependencies & Build
+        run: |
+          npm ci
+          npm run build --if-present
+
+      # Цей крок копіює зібрані файли проекту на твій сервер Hetzner
+      - name: Copy files to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: ".,!node_modules" # копіюємо все, крім локальних node_modules
+          target: "/var/www/snackenglish"
+
+      # Цей крок запускає або перезапускає бота на сервері через PM2
+      - name: Executing remote ssh commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/snackenglish
+            npm install --omit=dev # встановлюємо тільки production залежності на сервері
+            
+            # Перевіряємо, чи бот уже запущений в PM2. Якщо так — перезапускаємо, якщо ні — запускаємо вперше.
+            pm2 describe snack-bot > /dev/null && pm2 restart snack-bot || pm2 start dist/app.js --name "snack-bot"
+            pm2 save
