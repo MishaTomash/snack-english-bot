@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-level: '20'
+          node-version: '20'
 
       # Якщо твій бот написаний на TypeScript, тут відбувається збирання проекту перед відправкою
       - name: Install dependencies & Build
