@@ -7,7 +7,6 @@ import { sendRandomText, handleShowTranslation } from './handlers/texts';
 import { trackActivity } from './middlewares/activity';
 import { showProfile } from './handlers/profile';
 import { checkWordLimits } from './middlewares/limits';
-import { sendPremiumOffer } from './handlers/premium';
 import { showSettings, handleChangeLevelClick } from './handlers/settings';
 import { TestQuestion } from '../models/TestQuestion';
 import {
@@ -47,7 +46,18 @@ import {
   handleExplainTest,
   handleBackToTest
 } from './handlers/tests';
-import { handlePremiumPaymentSuccess } from './handlers/premium';
+
+import { 
+  sendPremiumMenu, 
+  sendCardPremiumOffer, 
+  sendStarsInvoice, 
+  handlePaidButton, 
+  handlePremiumApproval, 
+  handlePremiumRejection,
+  handlePreCheckoutQuery,
+  handleStarsPaymentSuccess
+} from './handlers/premium';
+
 import { handleTopMenu } from './handlers/rating';
 import { handleReferralMenu } from './handlers/referrals';
 
@@ -84,7 +94,7 @@ bot.command('text', sendRandomText);
 bot.command('test', sendRandomTest);
 bot.command('profile', showProfile);
 bot.command('stats', showProfile);
-bot.command('premium', sendPremiumOffer);
+// bot.command('premium', sendPremiumOffer);
 bot.command('admin', handleAdminCommand);
 bot.command('courses', handleCoursesList);
 
@@ -99,7 +109,7 @@ bot.callbackQuery(/^save_word_/, handleSaveWord);
 bot.callbackQuery(/^admin_users_\d+$/, handleAdminUsersPagination);
 bot.callbackQuery('next_text', sendRandomText);
 bot.callbackQuery('next_word', checkWordLimits, handleWords);
-bot.callbackQuery('buy_premium', sendPremiumOffer);
+// bot.callbackQuery('buy_premium', sendPremiumOffer);
 bot.callbackQuery('change_level', handleChangeLevelClick);
 bot.callbackQuery(/^set_reminder_/, handleSetReminder);
 bot.callbackQuery(/^answer_/, handleTestAnswer);
@@ -154,17 +164,36 @@ bot.callbackQuery('show_profile_btn', showProfile); // <-- ДОДАЙ ЦЕ
 bot.callbackQuery('adm_top_set_date', handleAdminTopSetDatePrompt);
 bot.callbackQuery('adm_top_end', handleAdminTopEnd);
 
-// ─── Платежі ─────────────────────────────────────────────────────────────────
-bot.on('pre_checkout_query', handlePreCheckout);
+// // ─── Платежі ─────────────────────────────────────────────────────────────────
+// bot.on('pre_checkout_query', handlePreCheckout);
+// bot.on('message:successful_payment', async (ctx) => {
+//   const payload = ctx.message?.successful_payment?.invoice_payload ?? '';
+
+//   if (payload === 'premium_subscription') {
+//     // 1. Якщо купили Преміум
+//     await handlePremiumPaymentSuccess(ctx);
+//   } else {
+//     // 2. Якщо це донат (Підтримка бота)
+//     await handleSuccessfulPayment(ctx);
+//   }
+// });
+
+// ─── Платежі (Ручний режим P2P) ─────────────────────────────────────────────
+
+bot.callbackQuery('pay_card', sendCardPremiumOffer);
+bot.callbackQuery('pay_stars', sendStarsInvoice);
+
+// 3. Обробка ручної оплати на картку (Твої адмінські кнопки і кнопка юзера)
+bot.callbackQuery(/paid_prem_/, handlePaidButton);
+bot.callbackQuery(/approve_prem_/, handlePremiumApproval);
+bot.callbackQuery(/reject_prem_/, handlePremiumRejection);
+
+// 4. Обробка автоматичної оплати Зірками
+bot.on('pre_checkout_query', handlePreCheckoutQuery);
 bot.on('message:successful_payment', async (ctx) => {
   const payload = ctx.message?.successful_payment?.invoice_payload ?? '';
-
-  if (payload === 'premium_subscription') {
-    // 1. Якщо купили Преміум
-    await handlePremiumPaymentSuccess(ctx);
-  } else {
-    // 2. Якщо це донат (Підтримка бота)
-    await handleSuccessfulPayment(ctx);
+  if (payload === 'premium_subscription_stars') {
+    await handleStarsPaymentSuccess(ctx);
   }
 });
 
@@ -180,7 +209,8 @@ bot.on('message', handleAdminMessages);
 
 // ─── Кнопки головного меню ───────────────────────────────────────────────────
 
-bot.hears('💎 Premium', sendPremiumOffer);
+// bot.hears('💎 Premium', sendPremiumOffer);
+bot.hears('💎 Premium', sendPremiumMenu);
 bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
 bot.hears('➕ Додати слово', handleAddWordPrompt);
 bot.hears('➕ Додати тест', handleAddTestPrompt);
@@ -207,9 +237,6 @@ bot.hears('👥 Запросити друзів', handleReferralMenu);
 
 
 bot.command('cleargeneral', async (ctx) => {
-
-
-
   try {
     const result = await TestQuestion.deleteMany({ wordId: null });
 

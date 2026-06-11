@@ -55,7 +55,7 @@ export const checkAndRewardReferrer = async (ctx: Context, userId: number) => {
         inviter.referralCount = (inviter.referralCount || 0) + 1;
 
         // Перевіряємо, чи досяг він 3 запрошених
-        if (inviter.referralCount >= 3 && !inviter.referralRewardClaimed) {
+        if (inviter.referralCount >= 1 && !inviter.referralRewardClaimed) {
             inviter.referralRewardClaimed = true;
             inviter.isPremium = true;
 

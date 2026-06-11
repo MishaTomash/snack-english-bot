@@ -5,7 +5,7 @@ dotenv.config();
 export const config = {
   BOT_TOKEN: process.env.BOT_TOKEN || '',
   MONGO_URI: process.env.MONGO_URI || '',
-  ADMIN_ID: Number(process.env.ADMIN_ID) || 0, // Додали зчитування ID адміністратора
+  ADMIN_ID: Number(process.env.ADMIN_ID) || 0, 
 };
 
 if (!config.BOT_TOKEN) {
