@@ -27,10 +27,10 @@ export const handleTopMenu = async (ctx: Context) => {
         const userRank = (currentUser.seasonXp || 0) > 0 ? usersAhead + 1 : 0;
 
         const medals = ['🥇', '🥈', '🥉'];
-        let message = `🏆 *ТОП РЕЙТИНГ ТИЖНЯ*\n_Сезон триває до ${endDateStr}_\n\n`;
+        let message = `🏆 *ТОП ТИЖНЯ* (до ${endDateStr})\n_Хто більше всього не спав?_ \n\n`;
 
         if (topUsers.length === 0) {
-            message += `Поки що ніхто не набрав балів цього сезону.\nСтань першим і отримай кубок! 🚀`;
+            message += `🙈 Поки ніхто не набрав балів. Стань першим — отримаєш кубок-наклейку і повагу бота.`;
         } else {
             let isUserInTop3 = false;
             topUsers.forEach((u, index) => {
@@ -40,23 +40,23 @@ export const handleTopMenu = async (ctx: Context) => {
                 message += `${medals[index]} ${index + 1}. ${nameStr} — ${u.seasonXp} балів\n`;
             });
 
-            message += `\n━━━━━━━━━━━━━━━━━━━\n`;
+            message += `\n━━━━━━━━━━━━━━━\n`;
 
             if (userRank === 0) {
-                message += `🙈 Ти ще не набрав балів цього сезону.\nПройди тест і з'явись у рейтингу! 👇`;
+                message += `🙈 Ти ще нуль. Пройди тест, з'явись у рейтингу, не будь овочем. 👇`;
             } else if (isUserInTop3) {
-                message += `🎉 Ти в ТОП-3! Тримай позицію до кінця тижня — переможцю кубок!`;
+                message += `🎉 Ти в ТОП-3! Тримайся — якщо впадеш, кубок отримає сусід.`;
             } else {
                 const xpToTop3 = topUsers[2].seasonXp - (currentUser.seasonXp || 0);
-                message += `📍 Твоє місце: *${userRank}* з ${totalParticipants}\n`;
+                message += `📍 Твоє місце: *${userRank}* (з ${totalParticipants})\n`;
                 message += `Твої бали: ${currentUser.seasonXp}\n`;
                 if (xpToTop3 > 0) {
-                    message += `🚀 До ТОП-3 залишилось: *${xpToTop3} балів*`;
+                    message += `🚀 До ТОП-3 не вистачає *${xpToTop3} балів*. Давай, натисни тест!`;
                 }
             }
         }
 
-        message += `\n\n🏆 Переможець тижня отримає кубок-наклейку!`;
+        message += `\n\n🏆 Переможець тижня отримає кубок-наклейку (і зможе хвалитися перед друзями).`;
 
         const keyboard = new InlineKeyboard()
             .text('🔄 Оновити', 'show_top').text('👤 Профіль', 'show_profile_btn');

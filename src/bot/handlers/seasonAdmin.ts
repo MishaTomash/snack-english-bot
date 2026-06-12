@@ -1,31 +1,28 @@
 import { Context, InlineKeyboard, Bot } from 'grammy';
 import { TopCycle } from '../../models/TopCycle';
-import { getSettings, BotSettings } from '../../models/BotSettings';
-import { endSeason } from '../../services/seasonService';
+import { endSeason, broadcastSeasonResults  } from '../../services/seasonService';
 import { config } from '../../config'; // ✅ додай цей імпорт
 
 // ✅ Тепер приймає number | undefined, а не Context
 const isAdmin = (userId: number | undefined): boolean => userId === config.ADMIN_ID;
 
-const pendingInput = new Map<number, 'date' | 'sticker'>();
+const pendingInput = new Map<number, 'date'>();
 
-// ===== Головне меню (відкривається кнопкою "🏆 Сезон рейтингу") =====
+// ===== Головне меню =====
 export const handleSeasonAdminMenu = async (ctx: Context) => {
     if (!isAdmin(ctx.from?.id)) return;
 
     const activeCycle = await TopCycle.findOne({ isActive: true });
-    const settings = await getSettings();
 
     const text =
         `🏆 *Керування сезоном*\n\n` +
         `Сезон №${activeCycle?.seasonNumber ?? '-'}\n` +
-        `Завершується: ${activeCycle ? activeCycle.endDate.toLocaleString('uk-UA') : 'невідомо'}\n` +
-        `Наклейка-кубок: ${settings.trophyStickerId ? '✅ встановлена' : '❌ не встановлена'}`;
+        `Завершується: ${activeCycle ? activeCycle.endDate.toLocaleString('uk-UA') : 'невідомо'}\n\n` +
+        `При завершенні сезону тобі надійде повідомлення з даними переможця — ти вручну надсилаєш йому подарунок, потім натискаєш кнопку розсилки.`;
 
     const keyboard = new InlineKeyboard()
         .text('🏁 Завершити сезон зараз', 'season_end_request').row()
-        .text('📅 Змінити дату завершення', 'season_set_date').row()
-        .text('🏆 Встановити наклейку-кубок', 'season_set_sticker');
+        .text('📅 Змінити дату завершення', 'season_set_date');
 
     if (ctx.callbackQuery) {
         await ctx.answerCallbackQuery().catch(() => {});
@@ -46,11 +43,10 @@ export const handleSeasonEndRequest = async (ctx: Context) => {
 
     await ctx.editMessageText(
         '⚠️ Завершити поточний сезон зараз?\n\n' +
-        'Це:\n' +
-        '• нагородить лідера наклейкою-кубком\n' +
-        '• розішле підсумки всім користувачам\n' +
-        '• скине бали сезону у всіх до 0\n' +
-        '• запустить новий сезон (+7 днів)',
+        '• Бот надішле тобі дані переможця\n' +
+        '• Скине бали сезону у всіх до 0\n' +
+        '• Запустить новий сезон (+7 днів)\n' +
+        '• Ти вручну відправляєш подарунок і натискаєш кнопку розсилки',
         { reply_markup: keyboard }
     );
 };
@@ -61,12 +57,49 @@ export const handleSeasonEndConfirm = async (ctx: Context) => {
 
     await endSeason(ctx.api);
 
-    await ctx.editMessageText('✅ Сезон завершено!\nПереможця нагороджено, всім надіслано підсумки, новий сезон розпочато (+7 днів).');
+    await ctx.editMessageText(
+        '✅ Сезон завершено!\n\nПеревір особисті повідомлення — там дані переможця і кнопка розсилки.'
+    );
 };
 
 export const handleSeasonCancel = async (ctx: Context) => {
     await ctx.answerCallbackQuery();
     await ctx.editMessageText('❌ Скасовано.');
+};
+
+// ===== Розсилка результатів (після того як ти вручну надіслав подарунок) =====
+export const handleBroadcastResults = async (ctx: Context) => {
+    if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery({ text: '⛔ Немає доступу', show_alert: true });
+
+    await ctx.answerCallbackQuery({ text: '⏳ Розсилаю...' });
+
+    const cycleIdStr = ctx.callbackQuery?.data?.replace('broadcast_results_', '');
+
+    let cycle;
+    try {
+        if (cycleIdStr && cycleIdStr !== 'latest') {
+            cycle = await TopCycle.findById(cycleIdStr);
+        }
+    } catch {}
+
+    if (!cycle) {
+        cycle = await TopCycle.findOne({ isActive: false }).sort({ endDate: -1 });
+    }
+
+    if (!cycle) {
+        return ctx.editMessageText('❌ Не знайдено завершеного сезону.');
+    }
+
+    await broadcastSeasonResults(
+        ctx.api,
+        cycle.winnerName,
+        cycle.winnerUsername ?? null, // ← передаємо username
+        cycle.winnerXp,
+        cycle.seasonNumber
+    );
+
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    await ctx.reply(`✅ Результати Сезону №${cycle.seasonNumber} надіслано всім!`);
 };
 
 // ===== Зміна дати завершення =====
@@ -79,17 +112,6 @@ export const handleSeasonSetDateRequest = async (ctx: Context) => {
     await ctx.reply('📅 Введи нову дату завершення сезону у форматі:\nДД.ММ.РРРР ГГ:ММ\n\nНаприклад: 21.06.2026 12:00');
 };
 
-// ===== Встановлення наклейки-кубка =====
-export const handleSeasonSetStickerRequest = async (ctx: Context) => {
-    const adminId = ctx.from?.id;
-    if (!isAdmin(adminId)) return ctx.answerCallbackQuery({ text: '⛔ Немає доступу', show_alert: true });
-
-    pendingInput.set(adminId!, 'sticker');
-    await ctx.answerCallbackQuery();
-    await ctx.reply('🏆 Надішли наклейку, яку бот видаватиме переможцю кожного тижня.');
-};
-
-// ===== Обробка тексту (дата) =====
 export const handlePendingTextInput = async (ctx: Context): Promise<boolean> => {
     const adminId = ctx.from?.id;
     if (!adminId || pendingInput.get(adminId) !== 'date') return false;
@@ -121,33 +143,15 @@ export const handlePendingTextInput = async (ctx: Context): Promise<boolean> => 
     activeCycle.endDate = newDate;
     await activeCycle.save();
 
-    await ctx.reply(`✅ Дату завершення сезону встановлено на ${newDate.toLocaleString('uk-UA')}.\nНаступний сезон автоматично почнеться через 7 днів від цієї дати.`);
+    await ctx.reply(`✅ Дату встановлено: ${newDate.toLocaleString('uk-UA')}`);
     return true;
 };
 
-// ===== Обробка наклейки =====
-export const handlePendingStickerInput = async (ctx: Context): Promise<boolean> => {
-    const adminId = ctx.from?.id;
-    if (!adminId || pendingInput.get(adminId) !== 'sticker') return false;
-
-    pendingInput.delete(adminId);
-
-    const stickerId = ctx.message?.sticker?.file_id;
-    if (!stickerId) {
-        await ctx.reply('❌ Не вдалося отримати наклейку, спробуй ще раз.');
-        return true;
-    }
-
-    await BotSettings.findOneAndUpdate({}, { trophyStickerId: stickerId }, { upsert: true });
-    await ctx.reply('✅ Наклейку-кубок збережено! Переможець тижня отримає саме її.');
-    return true;
-};
-
-// ===== Реєстрація callback-кнопок =====
+// ===== Реєстрація =====
 export const registerSeasonAdminHandlers = (bot: Bot) => {
     bot.callbackQuery('season_end_request', handleSeasonEndRequest);
     bot.callbackQuery('season_end_confirm', handleSeasonEndConfirm);
     bot.callbackQuery('season_set_date', handleSeasonSetDateRequest);
-    bot.callbackQuery('season_set_sticker', handleSeasonSetStickerRequest);
     bot.callbackQuery('season_cancel', handleSeasonCancel);
-    };
+    bot.callbackQuery(/^broadcast_results_/, handleBroadcastResults);
+}; 

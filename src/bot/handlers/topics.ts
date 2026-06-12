@@ -130,7 +130,7 @@ const sendNextTopicWord = async (ctx: Context, topicId: string) => {
         .text('🔙 До списку тем', 'topics_back');
 
     //   const text = `📚 <b>Слово з теми:</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Переклад:\n<tg-spoiler>🇺🇦 ${word.ukrainian}</tg-spoiler>`;
-    const text = `📚 <b>Слово з теми:</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Переклад:\n🇺🇦 ${word.ukrainian}`;
+    const text = `📚 <b>Тема:</b> ну, не спи, ось слово\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
 
     if (ctx.callbackQuery) {
         await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => { });

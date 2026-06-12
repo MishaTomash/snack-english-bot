@@ -20,23 +20,22 @@ export const sendPremiumMenu = async (ctx: Context) => {
   const text = `
 💎 *SnackEnglish Premium*
 
-Необмежене навчання, озвучка, складні тексти та розширена статистика!
-Обери зручний спосіб оплати:
+Безлім слів, курси + тести, більше хр,  і ніхто не скаже «ти сьогодні все вивчив, йди геть».
 
-💳 *Прямим переказом на картку (Mono/Приват)*
-Ціна: *30 грн* (Без комісій систем)
+Обери варіант:
 
-⭐ *Telegram Stars*
-Ціна: *75 Зірок* (Дорожче через комісію Apple/Telegram)
+💳 *Картка (Mono/Приват)* — 40 грн (без комісій)
+⭐ *Telegram Stars* — 75 ★ (комісія Apple/Telegram, тому дорожче)
+
+🎁 *Халява*: запроси 3 друзів → Premium безкоштовно.
   `;
 
   const keyboard = new InlineKeyboard()
-    .text('💳 Оплатити на картку (30 грн)', 'pay_card')
+    .text('💳 40 грн (картка)', 'pay_card')
     .row()
-    .text('⭐ Оплатити Зірками (75 ⭐️)', 'pay_stars')
+    .text('⭐ 75 ★ (Stars)', 'pay_stars')
     .row()
-    .text('Отримати БЕЗКОШТОВНО (30 грн)', 'pay_referral')
-    ;
+    .text('👥 Запросити друзів (безкоштовно)', 'pay_referral');
 
   await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };
@@ -53,7 +52,7 @@ export const sendCardPremiumOffer = async (ctx: Context) => {
   const text = `
 💳 *Оплата на картку*
 
-Вартість: *30 грн*
+Вартість: *40 грн*
 Перекажи кошти на картку Монобанку:
 \`${cardNumber}\` (натисни, щоб скопіювати)
 
@@ -87,7 +86,7 @@ export const handlePaidButton = async (ctx: Context) => {
 💰 <b>Нова заявка на Premium!</b>
 Юзер: ${username} (ID: <code>${telegramId}</code>)
 Коментар: <code>${orderId}</code>
-Сума: <b>30 грн</b>
+Сума: <b>40 грн</b>
 
 Перевір Монобанк.
   `;
@@ -155,19 +154,14 @@ export const handleStarsPaymentSuccess = async (ctx: Context) => {
   await ctx.reply(`🎉 *Вітаємо!*\n\nОплата Зірками пройшла успішно! 💎 Твій статус *Premium* активовано! 🚀`, { parse_mode: 'Markdown' });
 };
 
-// ─── 4. ДОПОМІЖНА ФУНКЦІЯ НАРАХУВАННЯ (Щоб не дублювати код) ──────────────
-const grantPremium = async (telegramId: number, xpAmount: number) => {
-  let activeCycle = await TopCycle.findOne({ isActive: true });
-  if (!activeCycle) {
-    const defaultDate = new Date();
-    defaultDate.setDate(defaultDate.getDate() + 30);
-    activeCycle = await TopCycle.create({ endDate: defaultDate, seasonNumber: 1 });
-  }
-  activeCycle.totalStars = (activeCycle.totalStars || 0) + xpAmount;
-  await activeCycle.save();
+// ─── ВИПРАВЛЕНА grantPremium ──────────────────────────────────────────────
+const grantPremium = async (telegramId: number, days: number = 30) => {
+  // Рахуємо дату закінчення відносно ЗАРАЗ, не від топ-циклу
+  const premiumExpiresAt = new Date();
+  premiumExpiresAt.setDate(premiumExpiresAt.getDate() + days);
 
   await User.findOneAndUpdate(
     { telegramId },
-    { isPremium: true, premiumExpiresAt: activeCycle.endDate }
+    { isPremium: true, premiumExpiresAt }
   );
 };

@@ -18,6 +18,7 @@ import { handleCoursesList } from '../handlers/courses';
 import { handleTopMenu } from '../handlers/rating';
 import { handleTopicsMenu } from '../handlers/topics';
 import { sendPremiumMenu } from '../handlers/premium';
+import { handleClearBlockedUsers } from '../handlers/adminCleanUser';
 
 export const registerHears = (bot: Bot) => {
   // Адмін
@@ -32,6 +33,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🎓 Керування курсами', handleAdminCoursesMenu);
   bot.hears('🔄 Оновити меню', handleForceMenuUpdate);
   bot.hears('🏆 Сезон рейтингу', handleSeasonAdminMenu);
+  bot.hears('🧹 Очистити заблокованих', handleClearBlockedUsers)
 
   // Користувач
   bot.hears('📚 Вчити слова', checkWordLimits, handleWords);
@@ -41,7 +43,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('👤 Профіль', showProfile);
   bot.hears('⚙️ Налаштування', showSettings);
   bot.hears('🎓 Курси', handleCoursesList);
-  bot.hears('🏆 Топ', handleTopMenu);
+  bot.hears('🏆 Топчик', handleTopMenu);
   bot.hears('📚 Слова по темах', handleTopicsMenu);
   bot.hears('💎 Premium', sendPremiumMenu);
 };

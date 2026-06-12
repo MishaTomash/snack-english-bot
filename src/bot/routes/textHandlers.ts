@@ -5,7 +5,7 @@ import { Word } from '../../models/Word';
 import { handleAdminTextInbound, handleAdminMessages } from '../handlers/admin';
 import { adminTopicStates } from '../handlers/adminTopics';
 import { adminCourseStates, handleAdminCourseTextInput } from '../handlers/adminCourses';
-import { handlePendingTextInput, handlePendingStickerInput } from '../handlers/seasonAdmin';
+import { handlePendingTextInput } from '../handlers/seasonAdmin';
 
 export const registerTextHandlers = (bot: Bot) => {
   // Режими адміна: теми / курси / старі команди word:/text:/test:
@@ -59,8 +59,4 @@ export const registerTextHandlers = (bot: Bot) => {
     if (!handled) return next();
   });
 
-  bot.on('message:sticker', async (ctx, next) => {
-    const handled = await handlePendingStickerInput(ctx);
-    if (!handled) return next();
-  });
 };

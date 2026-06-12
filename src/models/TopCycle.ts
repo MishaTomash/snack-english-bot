@@ -7,6 +7,7 @@ export interface ITopCycle extends Document {
   seasonNumber: number;
   totalStars: number;
   winnerTelegramId: number | null;
+  winnerUsername: string | null; // ← нове поле
   winnerName: string | null;
   winnerXp: number;
 }
@@ -18,6 +19,7 @@ const TopCycleSchema: Schema = new Schema({
   seasonNumber: { type: Number, default: 1 },
   totalStars: { type: Number, default: 0 },
   winnerTelegramId: { type: Number, default: null },
+  winnerUsername: { type: String, default: null }, // ← нове поле
   winnerName: { type: String, default: null },
   winnerXp: { type: Number, default: 0 },
 });

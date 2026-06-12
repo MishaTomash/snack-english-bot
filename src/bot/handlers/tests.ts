@@ -196,7 +196,7 @@ export const handleTestAnswer = async (ctx: Context) => {
   const isCorrect = parts[parts.length - 2] === '1';
 
   let alertText = isCorrect ? '✅ Правильно! +5 XP 🎯' : '❌ Неправильно. Спробуй ще раз!';
-  let showAlert = false; 
+  let showAlert = false;
 
   if (isCorrect) {
     const progress = await updateUserProgress(telegramId, 'test');
@@ -223,16 +223,15 @@ export const handleTestAnswer = async (ctx: Context) => {
   if (source === 'general') {
     const user = await User.findOne({ telegramId });
     const FREE_TESTS_LIMIT = 10;
-    
+
     const isLimitReached = user && !user.isPremium && (user.testsTakenToday >= FREE_TESTS_LIMIT);
 
     if (isLimitReached) {
-      const limitMsg = `🛑 <b>Денний ліміт вичерпано!</b>\n\nТи пройшов <b>${FREE_TESTS_LIMIT}</b> безкоштовних тестів на сьогодні. 🎉\n\n💎 Оформи Premium, щоб проходити необмежену кількість тестів і навчатися без пауз!`;
-      
-      return await ctx.reply(limitMsg, { 
-        parse_mode: 'HTML', 
-        reply_markup: new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu') 
-      }).catch(() => {});
+      const limitMsg = `🛑 <b>Ліміт на сьогодні — край!</b>\n\nТи пройшов <b>${FREE_TESTS_LIMIT}</b> тестів безкоштовно. Це більше, ніж домашок за тиждень. 🎉\n\n💎 <b>Premium</b> знімає ліміт — тестуй до ночі, бот не засне.`;
+      return await ctx.reply(limitMsg, {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu')
+      }).catch(() => { });
     }
   }
 

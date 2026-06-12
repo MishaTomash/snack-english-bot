@@ -1,61 +1,120 @@
-import { Api } from 'grammy';
+import { Api, InlineKeyboard } from 'grammy';
 import { User } from '../models/User';
 import { TopCycle } from '../models/TopCycle';
-import { getSettings } from '../models/BotSettings';
 import { formatName } from '../bot/utils/format';
+import { config } from '../config';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Знаходить переможця сезону (1 місце)
 export const findSeasonWinner = async () => {
     return await User.findOne({ seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).lean();
 };
 
-// Надсилає наклейку-кубок переможцю (з налаштувань, встановлених адміном)
-export const sendTrophySticker = async (api: Api, winner: any) => {
-    const settings = await getSettings();
+export const notifyAdminAboutWinner = async (api: Api, winner: any, cycle: any) => {
+    const seasonNum = cycle?.seasonNumber ?? '?';
+    const cycleId = cycle?._id?.toString() ?? 'latest';
 
-    if (!settings.trophyStickerId) {
-        console.warn('⚠️ Наклейку-кубок не встановлено в адмінці — пропускаю відправку.');
-        return;
+    let text: string;
+
+    if (winner) {
+        const usernameStr = winner.username ? `@${winner.username}` : '(немає username)';
+        const profileLink = winner.username
+            ? `https://t.me/${winner.username}`
+            : `tg://user?id=${winner.telegramId}`;
+
+        text =
+            `🏆 <b>Сезон №${seasonNum} завершено!</b>\n\n` +
+            `<b>Переможець:</b>\n` +
+            `👤 Ім'я: ${formatName(winner)}\n` +
+            `🆔 Telegram ID: <code>${winner.telegramId}</code>\n` +
+            `📱 Username: ${usernameStr}\n` +
+            `⭐ Балів: <b>${winner.seasonXp}</b>\n\n` +
+            `🔗 <a href="${profileLink}">Відкрити профіль</a>\n\n` +
+            `1️⃣ Перейди за посиланням\n` +
+            `2️⃣ Надішли наклейку вручну\n` +
+            `3️⃣ Натисни кнопку нижче`;
+    } else {
+        text =
+            `📢 <b>Сезон №${seasonNum} завершено!</b>\n\n` +
+            `Переможця немає — ніхто не набрав балів 😔\n\n` +
+            `Натисни кнопку нижче — бот повідомить всіх.`;
     }
 
-    try {
-        await api.sendSticker(winner.telegramId, settings.trophyStickerId);
-        await api.sendMessage(
-            winner.telegramId,
-            `🏆 Вітаємо! Ти зайняв 1 місце цього тижня з *${winner.seasonXp}* балами!\nТримай свій кубок 👆`,
-            { parse_mode: 'Markdown' }
-        );
-    } catch (e) {
-        console.error('Не вдалося надіслати кубок переможцю:', e);
-    }
+    const keyboard = new InlineKeyboard()
+        .text('📢 Оголосити результати всім', `broadcast_results_${cycleId}`);
+
+    await api.sendMessage(config.ADMIN_ID, text, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+        link_preview_options: { is_disabled: true },
+    });
 };
 
-// Розсилка підсумків сезону всім користувачам
-export const broadcastSeasonResults = async (api: Api, winner: any | null) => {
-    const message = winner
-        ? `📢 *Підсумки тижня!*\n\n🏆 Переможець: *${formatName(winner)}* з ${winner.seasonXp} балами!\nВітаємо його 🎉\n\nРейтинг скинуто — починається новий тиждень. Вперед за новим кубком! 💪`
-        : `📢 *Новий тиждень почався!*\n\nЦього разу переможця немає — ніхто не набрав балів 😔\nРейтинг скинуто. Спробуй стати першим цього тижня! 💪`;
+// ✅ Оновлений текст розсилки + кнопки для користувачів
+export const broadcastSeasonResults = async (
+    api: Api,
+    winnerName: string | null,
+    winnerUsername: string | null,
+    winnerXp: number,
+    seasonNumber: number
+) => {
+    let message: string;
+    let keyboard: InlineKeyboard;
+
+    if (winnerName) {
+        message =
+            `🏆 <b>ПЕРЕМОЖЕЦЬ ТИЖНЯ — Сезон №${seasonNumber}!</b>\n\n` +
+            `👑 <b>${winnerName}</b> щойно отримав ексклюзивну наклейку-кубок прямо в Telegram!\n\n` +
+            `<i>Вчив слова щодня, посів ТОП-1 і забрав нагороду</i> 🎁\n\n` +
+            `——————————————\n` +
+            `🆕 <b>Новий тиждень — нова боротьба!</b>\n\n` +
+            `Хочеш так само?\n` +
+            `Всього кілька слів на день — і ти в грі.\n` +
+            `Перший у рейтингу наприкінці тижня отримає наклейку! 🏆\n\n` +
+            `👇 Починай прямо зараз:`;
+
+        keyboard = new InlineKeyboard();
+
+        if (winnerUsername) {
+            keyboard.url(`👑 Профіль переможця`, `https://t.me/${winnerUsername}`).row();
+        }
+
+        keyboard.text('🏆 Переглянути рейтинг', 'show_top');
+
+    } else {
+        message =
+            `📢 <b>Сезон №${seasonNumber} завершено!</b>\n\n` +
+            `Цього тижня ніхто не взяв наклейку 👀\n\n` +
+            `——————————————\n` +
+            `🆕 <b>Новий тиждень — нова можливість!</b>\n\n` +
+            `Наклейка ще нікому не дісталась — вона чекає на тебе.\n` +
+            `Вчи слова щодня і будь першим у рейтингу! 🏆`;
+
+        keyboard = new InlineKeyboard()
+            .text('🏆 Переглянути рейтинг', 'show_top');
+    }
 
     const users = await User.find({}, { telegramId: 1 }).lean();
+    let sent = 0;
 
     for (const u of users) {
         try {
-            await api.sendMessage(u.telegramId, message, { parse_mode: 'Markdown' });
-        } catch {
-            // юзер заблокував бота — пропускаємо
-        }
+            await api.sendMessage(u.telegramId, message, {
+                parse_mode: 'HTML',
+                reply_markup: keyboard,
+            });
+            sent++;
+        } catch {}
         await new Promise((r) => setTimeout(r, 40));
     }
+
+    console.log(`✅ Розсилка Сезон №${seasonNumber}: ${sent}/${users.length}`);
 };
 
-// Скидання сезонних балів усім
 export const resetAllSeasonXp = async () => {
     await User.updateMany({}, { $set: { seasonXp: 0 } });
 };
 
-// Створення нового сезону: +7 днів від попередньої дати завершення
 export const createNewCycle = async (prev?: { endDate: Date; seasonNumber: number } | null) => {
     const now = new Date();
     const baseDate = prev ? prev.endDate : now;
@@ -69,34 +128,32 @@ export const createNewCycle = async (prev?: { endDate: Date; seasonNumber: numbe
     });
 };
 
-// Якщо активного сезону немає взагалі — створити перший
 export const ensureActiveCycle = async () => {
     const active = await TopCycle.findOne({ isActive: true });
     if (active) return active;
     return await createNewCycle(null);
 };
 
-// Головна функція завершення сезону
 export const endSeason = async (api: Api) => {
     const activeCycle = await TopCycle.findOne({ isActive: true });
     const winner = await findSeasonWinner();
-
-    if (winner) {
-        await sendTrophySticker(api, winner);
-    }
-
-    await broadcastSeasonResults(api, winner);
-    await resetAllSeasonXp();
 
     if (activeCycle) {
         activeCycle.isActive = false;
         activeCycle.winnerTelegramId = winner?.telegramId ?? null;
         activeCycle.winnerName = winner ? formatName(winner) : null;
+        activeCycle.winnerUsername = winner?.username ?? null; // ← зберігаємо username
         activeCycle.winnerXp = winner?.seasonXp ?? 0;
         await activeCycle.save();
     }
 
+    await resetAllSeasonXp();
+
     await createNewCycle(
-        activeCycle ? { endDate: activeCycle.endDate, seasonNumber: activeCycle.seasonNumber } : null
+        activeCycle
+            ? { endDate: activeCycle.endDate, seasonNumber: activeCycle.seasonNumber }
+            : null
     );
+
+    await notifyAdminAboutWinner(api, winner, activeCycle);
 };

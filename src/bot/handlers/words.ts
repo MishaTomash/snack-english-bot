@@ -60,10 +60,10 @@ export const handleWords = async (ctx: Context) => {
 
     if (!user.isPremium && wordsLearnedToday >= effectiveLimit) {
       const limitMsg =
-        `⏰ *Слова на сьогодні закінчились!*\n\n` +
-        `Ти опрацював ${wordsLearnedToday} слів — відмінно! 🎉\n` +
-        `Нові слова будуть доступні завтра.\n\n` +
-        `💎 _Або підключи Premium для безлімітного навчання._`;
+        `⏰ *Слова на сьогодні скінчилися!* (так, буває)\n\n` +
+        `Ти вивчив ${wordsLearnedToday} слів — це більше, ніж конспектів за семестр 🎉\n` +
+        `Нові слова з'являться завтра. Або...\n\n` +
+        `💎 *Premium* знімає ліміт — як енергетик, але корисніше.`;
 
       const limitKeyboard = new InlineKeyboard()
         .text('🔔 Нагадати завтра', 'reminder_tomorrow')
@@ -72,7 +72,7 @@ export const handleWords = async (ctx: Context) => {
 
       if (ctx.callbackQuery) {
         return ctx.editMessageText(limitMsg, {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: limitKeyboard,
         }).catch(() =>
           ctx.reply(limitMsg, { parse_mode: 'Markdown', reply_markup: limitKeyboard }),
@@ -97,8 +97,7 @@ export const handleWords = async (ctx: Context) => {
 
     const word = words[0];
 
-const message = `📚 <b>Твоє слово на сьогодні (${user.level})</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Переклад:\n🇺🇦 ${word.ukrainian}`;
-
+const message = `📚 <b>Слово дня (${user.level})</b> — перевіримо, чи ти ще не забув, як дихати\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
     // 🌟 ЗМІНЕНО: Тепер кнопка передає ID нового слова!
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)
