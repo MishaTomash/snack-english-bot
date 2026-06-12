@@ -58,10 +58,10 @@ export const showProfile = async (ctx: Context) => {
                         `🏆 *Ранг ${rankInfo.level}: ${rankInfo.name}* (${xp} XP)\n` +
                         `${progressBar} ${progressPercent}%\n` +
                         `_${xpLeftStr}_\n\n` +
-                        `${streakEmoji} Серія: ${streak} дн. (не зривай — соромно перед ботом)\n` +
+                        `${streakEmoji} Серія: ${streak} дн. (не зривай — бійся бога!)\n` +
                         `📚 Вивчено слів: ${wordsLearned}\n` +
                         `📝 Тестів пройдено: ${testsPassed}\n\n` +
-                        `🏆 _Продовжуй — прогрес є, навіть якщо здається, що ні._`;
+                        `🏆  _Продовжуй, ти вже в режимі росту_`;
 
         const keyboard = new InlineKeyboard().text('🏆 Топ користувачів', 'show_top');
 

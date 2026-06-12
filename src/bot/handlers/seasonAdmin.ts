@@ -8,27 +8,43 @@ const isAdmin = (userId: number | undefined): boolean => userId === config.ADMIN
 
 const pendingInput = new Map<number, 'date'>();
 
-// ===== Головне меню =====
+// ===== Головне меню — показує різний UI залежно від наявності сезону =====
 export const handleSeasonAdminMenu = async (ctx: Context) => {
     if (!isAdmin(ctx.from?.id)) return;
 
     const activeCycle = await TopCycle.findOne({ isActive: true });
 
+    if (ctx.callbackQuery) {
+        await ctx.answerCallbackQuery().catch(() => {});
+    }
+
+    // ← якщо немає активного сезону — показуємо кнопку створення
+    if (!activeCycle) {
+        const keyboard = new InlineKeyboard()
+            .text('🆕 Створити новий сезон', 'season_create_new').row()
+            .text('📅 Створити з датою', 'season_set_date');
+
+        const text = `🏆 *Керування сезоном*\n\n⚠️ Активного сезону немає.\nСтвори новий сезон або вкажи дату завершення.`;
+
+        if (ctx.callbackQuery) {
+            return ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard }).catch(() => {});
+        }
+        return ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
+    }
+
     const text =
         `🏆 *Керування сезоном*\n\n` +
-        `Сезон №${activeCycle?.seasonNumber ?? '-'}\n` +
-        `Завершується: ${activeCycle ? activeCycle.endDate.toLocaleString('uk-UA') : 'невідомо'}\n\n` +
-        `При завершенні сезону тобі надійде повідомлення з даними переможця — ти вручну надсилаєш йому подарунок, потім натискаєш кнопку розсилки.`;
+        `Сезон №${activeCycle.seasonNumber}\n` +
+        `Завершується: ${activeCycle.endDate.toLocaleString('uk-UA')}\n\n` +
+        `При завершенні сезону тобі надійде повідомлення з даними переможця.`;
 
     const keyboard = new InlineKeyboard()
         .text('🏁 Завершити сезон зараз', 'season_end_request').row()
         .text('📅 Змінити дату завершення', 'season_set_date');
 
     if (ctx.callbackQuery) {
-        await ctx.answerCallbackQuery().catch(() => {});
         return ctx.editMessageText(text, { parse_mode: 'Markdown', reply_markup: keyboard }).catch(() => {});
     }
-
     return ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };
 
@@ -101,7 +117,27 @@ export const handleBroadcastResults = async (ctx: Context) => {
     await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
     await ctx.reply(`✅ Результати Сезону №${cycle.seasonNumber} надіслано всім!`);
 };
+export const handleSeasonCreateNew = async (ctx: Context) => {
+    if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery({ text: '⛔ Немає доступу', show_alert: true });
+    await ctx.answerCallbackQuery();
 
+    const now = new Date();
+    const endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const lastCycle = await TopCycle.findOne().sort({ seasonNumber: -1 });
+    const seasonNumber = (lastCycle?.seasonNumber ?? 0) + 1;
+
+    await TopCycle.create({
+        startDate: now,
+        endDate,
+        seasonNumber,
+        isActive: true,
+    });
+
+    await ctx.editMessageText(
+        `✅ Сезон №${seasonNumber} створено!\nЗавершується: ${endDate.toLocaleString('uk-UA')}`,
+    );
+};
 // ===== Зміна дати завершення =====
 export const handleSeasonSetDateRequest = async (ctx: Context) => {
     const adminId = ctx.from?.id;
@@ -134,9 +170,23 @@ export const handlePendingTextInput = async (ctx: Context): Promise<boolean> => 
 
     pendingInput.delete(adminId);
 
-    const activeCycle = await TopCycle.findOne({ isActive: true });
+    let activeCycle = await TopCycle.findOne({ isActive: true });
+
+    // ← якщо немає активного — створюємо новий з вказаною датою
     if (!activeCycle) {
-        await ctx.reply('❌ Активного сезону не знайдено.');
+        const lastCycle = await TopCycle.findOne().sort({ seasonNumber: -1 });
+        const seasonNumber = (lastCycle?.seasonNumber ?? 0) + 1;
+
+        await TopCycle.create({
+            startDate: new Date(),
+            endDate: newDate,
+            seasonNumber,
+            isActive: true,
+        });
+
+        await ctx.reply(
+            `✅ Сезон №${seasonNumber} створено!\nЗавершується: ${newDate.toLocaleString('uk-UA')}`
+        );
         return true;
     }
 
@@ -147,11 +197,12 @@ export const handlePendingTextInput = async (ctx: Context): Promise<boolean> => 
     return true;
 };
 
-// ===== Реєстрація =====
+// ===== Реєстрація 
 export const registerSeasonAdminHandlers = (bot: Bot) => {
     bot.callbackQuery('season_end_request', handleSeasonEndRequest);
     bot.callbackQuery('season_end_confirm', handleSeasonEndConfirm);
     bot.callbackQuery('season_set_date', handleSeasonSetDateRequest);
     bot.callbackQuery('season_cancel', handleSeasonCancel);
+    bot.callbackQuery('season_create_new', handleSeasonCreateNew); // ← новий
     bot.callbackQuery(/^broadcast_results_/, handleBroadcastResults);
-}; 
+};

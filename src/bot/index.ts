@@ -11,6 +11,7 @@ import { registerPayments } from './routes/payments';
 import { registerErrorHandler } from './routes/errors';
 
 import { setupSeasonScheduler } from '../services/seasonScheduler';
+import { setupBotCommands } from './setup/commands'; // ← додай імпорт
 
 export const bot = new Bot(config.BOT_TOKEN);
 
@@ -25,3 +26,4 @@ registerPayments(bot);
 registerErrorHandler(bot);
 
 setupSeasonScheduler(bot).catch(console.error);
+setupBotCommands(bot).catch(console.error); // ← додай цей рядок

@@ -97,7 +97,7 @@ export const handleWords = async (ctx: Context) => {
 
     const word = words[0];
 
-const message = `📚 <b>Слово дня (${user.level})</b> — перевіримо, чи ти ще не забув, як дихати\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
+const message = `📚 <b>Давай, давай, вчися! Твій рівень поки що лише ${user.level}.</b> \n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
     // 🌟 ЗМІНЕНО: Тепер кнопка передає ID нового слова!
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)

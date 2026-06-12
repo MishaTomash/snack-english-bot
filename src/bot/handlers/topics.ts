@@ -41,7 +41,7 @@ export const handleTopicWordAction = async (ctx: Context) => {
     // Перевірка ліміту (якщо не преміум і дія "Знаю")
     if (!user.isPremium && action === 'know' && user.freeTopicWordsLearned >= 10) {
         return ctx.editMessageText(
-            '🔒 Ви вивчили 10 безкоштовних слів з тем.\n\nОформіть Premium, щоб вчити всі слова (100+).',
+            '🔒 Ви вивчили 10 безкоштовних слів з тем.\n\nОформіть Premium, щоб вчити всі слова (1000+).',
             { reply_markup: new InlineKeyboard().text('💎 Купити Premium', 'open_premium_menu') }
         );
     }
@@ -100,7 +100,7 @@ const sendNextTopicWord = async (ctx: Context, topicId: string) => {
     // Перевірка ліміту для безкоштовних користувачів
     if (!user.isPremium && user.freeTopicWordsLearned >= 10) {
         const limitKeyboard = new InlineKeyboard().text('💎 Купити Premium', 'open_premium_menu');
-        const limitText = '🔒 Ви вивчили 10 безкоштовних слів з тем.\n\nОформіть Premium, щоб вчити всі слова (100+).';
+        const limitText = '🔒 Ви вивчили 10 безкоштовних слів з тем.\n\nОформіть Premium, щоб вчити всі слова (1000+).';
         if (ctx.callbackQuery) return ctx.editMessageText(limitText, { reply_markup: limitKeyboard });
         return ctx.reply(limitText, { reply_markup: limitKeyboard });
     }
@@ -129,8 +129,7 @@ const sendNextTopicWord = async (ctx: Context, topicId: string) => {
         .text('➡️ Наступне слово', `topic_know_${topicId}_${word._id}`).row()
         .text('🔙 До списку тем', 'topics_back');
 
-    //   const text = `📚 <b>Слово з теми:</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Переклад:\n<tg-spoiler>🇺🇦 ${word.ukrainian}</tg-spoiler>`;
-    const text = `📚 <b>Тема:</b> ну, не спи, ось слово\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
+    const text = `📚 <b>Тема: Та ну, думаєш, я справді знаю? Давай вчи!</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
 
     if (ctx.callbackQuery) {
         await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => { });

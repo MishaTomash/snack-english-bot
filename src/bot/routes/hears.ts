@@ -33,7 +33,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🎓 Керування курсами', handleAdminCoursesMenu);
   bot.hears('🔄 Оновити меню', handleForceMenuUpdate);
   bot.hears('🏆 Сезон рейтингу', handleSeasonAdminMenu);
-  bot.hears('🧹 Очистити заблокованих', handleClearBlockedUsers)
+  bot.hears('🧹заблокованих', handleClearBlockedUsers)
 
   // Користувач
   bot.hears('📚 Вчити слова', checkWordLimits, handleWords);

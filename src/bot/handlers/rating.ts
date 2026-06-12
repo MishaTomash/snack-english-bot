@@ -7,7 +7,7 @@ export const handleTopMenu = async (ctx: Context) => {
     const telegramId = ctx.from?.id;
     if (!telegramId) return;
 
-    if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
 
     try {
         const currentUser = await User.findOne({ telegramId });
@@ -43,25 +43,37 @@ export const handleTopMenu = async (ctx: Context) => {
             message += `\n━━━━━━━━━━━━━━━\n`;
 
             if (userRank === 0) {
-                message += `🙈 Ти ще нуль. Пройди тест, з'явись у рейтингу, не будь овочем. 👇`;
+                message += `🙈 Ти ще не в грі цього тижня.\nПройди тест — з'явись у рейтингу! 👇`;
+
+            } else if (userRank === 1) {
+                message += `👑 *Ти лідер цього тижня!*\n`;
+                message += `Тримай позицію до кінця тижня — наклейка вже майже твоя 🏆\n`;
+                message += `Але не розслабляйся — другий не спить 👀`;
+
             } else if (isUserInTop3) {
-                message += `🎉 Ти в ТОП-3! Тримайся — якщо впадеш, кубок отримає сусід.`;
+                const xpToFirst = topUsers[0].seasonXp - (currentUser.seasonXp || 0);
+                message += `🥈 Ти в ТОП-3, але не №1!\n`;
+                message += `До лідера: *${xpToFirst} балів* — наклейку зараз забере він.\n`;
+                message += `Вчи далі і перехопи перше місце! 💪`;
+
             } else {
-                const xpToTop3 = topUsers[2].seasonXp - (currentUser.seasonXp || 0);
-                message += `📍 Твоє місце: *${userRank}* (з ${totalParticipants})\n`;
+                const xpToTop3 = topUsers[2]?.seasonXp - (currentUser.seasonXp || 0);
+                message += `📍 Твоє місце: *${userRank}* з ${totalParticipants}\n`;
                 message += `Твої бали: ${currentUser.seasonXp}\n`;
                 if (xpToTop3 > 0) {
-                    message += `🚀 До ТОП-3 не вистачає *${xpToTop3} балів*. Давай, натисни тест!`;
+                    message += `🚀 До ТОП-3 не вистачає *${xpToTop3} балів* — жми тест!`;
                 }
             }
         }
 
-        message += `\n\n🏆 Переможець тижня отримає кубок-наклейку (і зможе хвалитися перед друзями).`;
+        message += `\n\n🏆 Переможець тижня отримає Telegram-стікер-кубок (вартістю 100 зірочок ⭐) 🎁\n`
+            + `і трохи поваги від системи 😄\n\n`
+            + `давай вчитися!🚀`;
 
         const keyboard = new InlineKeyboard()
             .text('🔄 Оновити', 'show_top').text('👤 Профіль', 'show_profile_btn');
 
-        if (ctx.callbackQuery) return ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard }).catch(() => {});
+        if (ctx.callbackQuery) return ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard }).catch(() => { });
         return ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
     } catch (error) {
         await ctx.reply('❌ Не вдалося завантажити рейтинг.');

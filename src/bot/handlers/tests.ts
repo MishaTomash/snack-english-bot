@@ -34,7 +34,7 @@ export const sendTestMessage = async (
   const safeQuestion = escapeMarkdownV2(questionText);
 
   // 1. Різні заголовки залежно від типу тесту
-  const title = source === 'general' ? '🎯 *Міні\\-тест*' : '🧪 *Тест до слова*';
+  const title = source === 'general' ? '😏 *Не підглядай!*' : '🤔 *Ну що, памʼятаєш?*';
   const message = `${title}\n\n${safeQuestion}`;
 
   const keyboard = buildTestKeyboard(
@@ -134,7 +134,7 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
     if (!user.seenWords || user.seenWords.length === 0) {
       return ctx.reply(
         '📭 *Ти ще не вивчив жодного слова\\!*\n\n' +
-        'Спочатку вивчи кілька слів через «📚 Нові слова», щоб тут з\'явились тести саме для них\\.',
+        'Спочатку вивчи кілька слів через «📚 Вчити слова», щоб тут з\'явились тести саме для них\\.',
         { parse_mode: 'MarkdownV2' },
       );
     }
@@ -294,7 +294,7 @@ export const handleExplainTest = async (ctx: Context) => {
 
     // Використовуємо HTML для пояснення, щоб уникнути помилок з Markdown
     await ctx.editMessageText(
-      `💡 <b>Пояснення:</b>\n\n${test.explanation}`,
+      `💡 <b>Підглядаєш? Ну-ну 😏</b>\n\n${test.explanation}`,
       {
         parse_mode: 'HTML',
         reply_markup: backKeyboard
