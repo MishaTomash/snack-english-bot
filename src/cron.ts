@@ -31,47 +31,6 @@ const daysUntil = (date: Date): number => {
   return Math.ceil((date.getTime() - now) / (1000 * 60 * 60 * 24));
 };
 
-// ─── Cron: нагадування про повторення курсу ───────────────────────────────────
-
-const runCourseReminders = async (bot: Bot) => {
-  try {
-    const now = new Date();
-
-    const dueReminders = await CourseProgress.find({
-      reviewDate: { $lte: now },
-      completed: true,
-    }).lean();
-
-    for (const progress of dueReminders) {
-      try {
-        const course = await Course.findOne({ slug: progress.courseSlug }).lean();
-        const courseTitle = course?.title ?? progress.courseSlug;
-
-        await bot.api.sendMessage(
-          progress.telegramId,
-          `🔔 <b>НАГАДУВАННЯ</b>\n\nЧас повторити курс «<b>${courseTitle}</b>»!\n\nПовторення допомагає запам'ятати надовго. 💪`,
-          {
-            parse_mode: 'HTML',
-            reply_markup: new InlineKeyboard().text(
-              '📖 Розпочати повторення',
-              `course_open_${progress.courseSlug}`,
-            ),
-          },
-        );
-      } catch (err: any) {
-        if (err?.error_code !== 403 && err?.error_code !== 400) {
-          console.error(`Помилка нагадування курсу для ${progress.telegramId}:`, err.message);
-        }
-      } finally {
-        await CourseProgress.findByIdAndUpdate(progress._id, {
-          $unset: { reviewDate: '' },
-        });
-      }
-    }
-  } catch (err) {
-    console.error('Помилка cron-job нагадувань курсів:', err);
-  }
-};
 
 // ─── Cron: нагадування юзерам "нові слова доступні" ──────────────────────────
 // Запускається щогодини, шукає юзерів у яких reminderTime збігається з поточною
@@ -168,7 +127,7 @@ const runPremiumExpiryWarnings = async (bot: Bot) => {
 
 export const startCronJobs = (bot: Bot) => {
   setInterval(async () => {
-    await runCourseReminders(bot);
+
     await runWordReminders(bot);
     await runPremiumExpiryWarnings(bot);
   }, 60 * 60 * 1000); // щогодини
