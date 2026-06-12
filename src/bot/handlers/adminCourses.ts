@@ -270,38 +270,56 @@ export const handleAdminCourseTextInput = async (ctx: Context) => {
     return;
   }
 };
-
+const sendWithRetry = async (fn: () => Promise<unknown>): Promise<'ok' | 'fail'> => {
+    let attempts = 0;
+    while (attempts < 3) {
+        try {
+            await fn();
+            return 'ok';
+        } catch (err: any) {
+            if (err?.error_code === 429) {
+                // Telegram каже "зачекай" — чекаємо і пробуємо ще раз
+                const waitMs = (err?.parameters?.retry_after ?? 5) * 1000;
+                console.warn(`⚠️ 429 Too Many Requests — чекаю ${waitMs}ms`);
+                await new Promise(res => setTimeout(res, waitMs));
+                attempts++;
+            } else {
+                // Юзер заблокував бота або інша помилка — пропускаємо
+                return 'fail';
+            }
+        }
+    }
+    return 'fail';
+};
 // ─── 5. Примусове оновлення меню ─────────────────────────────────────────────
 
 export const handleForceMenuUpdate = async (ctx: Context) => {
-  if (!isAdmin(ctx)) return;
+    if (!isAdmin(ctx)) return;
 
-  await ctx.reply('⏳ Починаю розсилку оновленого меню всім користувачам...');
+    await ctx.reply('⏳ Починаю розсилку оновленого меню...');
 
-  try {
-    const users = await User.find({}).select('telegramId').lean();
-    let successCount = 0;
-    let failCount = 0;
+    try {
+        const users = await User.find({}).select('telegramId').lean();
+        let successCount = 0;
+        let failCount = 0;
 
-    for (const user of users) {
-      try {
-        await ctx.api.sendMessage(user.telegramId, '🍪 Меню оновлено!', {
-          parse_mode: 'HTML',
-          reply_markup: createMainMenu(),
-        });
-        successCount++;
-      } catch {
-        failCount++;
-      }
-      await new Promise(res => setTimeout(res, 50));
+        for (const user of users) {
+            const result = await sendWithRetry(() =>
+                ctx.api.sendMessage(user.telegramId, '🍪 Меню оновлено!', {
+                    parse_mode: 'HTML',
+                    reply_markup: createMainMenu(),
+                })
+            );
+            result === 'ok' ? successCount++ : failCount++;
+            await new Promise(res => setTimeout(res, 50));
+        }
+
+        await ctx.reply(
+            `✅ <b>Готово!</b>\n\nОтримали: <b>${successCount}</b>\nЗаблокували бота: <b>${failCount}</b>`,
+            { parse_mode: 'HTML' }
+        );
+    } catch (err) {
+        console.error('Force menu update error:', err);
+        await ctx.reply('❌ Критична помилка під час оновлення.');
     }
-
-    await ctx.reply(
-      `✅ <b>Готово!</b>\n\nОтримали: <b>${successCount}</b>\nЗаблокували бота: <b>${failCount}</b>`,
-      HTML
-    );
-  } catch (err) {
-    console.error('Force menu update error:', err);
-    await ctx.reply('❌ Критична помилка під час оновлення.', HTML);
-  }
 };

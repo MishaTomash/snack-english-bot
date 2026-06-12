@@ -118,12 +118,12 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
   const textData = ctx.message?.text;
   if (!textData) return next();
 
-// ── 1. БАГАТО СЛІВ (з опціональними прив'язаними тестами) ─────────────────
+  // ── 1. БАГАТО СЛІВ (з опціональними прив'язаними тестами) ─────────────────
   if (textData.includes('word:')) {
     try {
       // Розбиваємо повідомлення на рядки і беремо тільки ті, що починаються на 'word:'
       const lines = textData.split('\n').filter(line => line.trim().startsWith('word:'));
-      
+
       if (lines.length === 0) return;
 
       let wordsAdded = 0;
@@ -186,7 +186,7 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
 
       // Формуємо фінальний звіт
       let finalMessage = `✅ *Масове додавання завершено!*\n\n📚 Додано слів: *${wordsAdded}*\n🎯 Додано тестів: *${testsAdded}*`;
-      
+
       if (errors.length > 0) {
         finalMessage += `\n\n⚠️ *Попередження:*\n${errors.join('\n')}`;
       }
@@ -199,12 +199,12 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
     }
   }
 
-// ── 2. ТЕСТ (загальний, без прив'язки до слова) ───────────────────────────
+  // ── 2. ТЕСТ (загальний, без прив'язки до слова) ───────────────────────────
   if (textData.includes('test:')) {
     try {
       // Розбиваємо весь текст на рядки і беремо тільки ті, що починаються на 'test:'
       const lines = textData.split('\n').filter(line => line.trim().startsWith('test:'));
-      
+
       if (lines.length === 0) return; // Якщо тестів немає, йдемо далі
 
       let addedCount = 0;
@@ -426,30 +426,42 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
     }
     return ctx.reply('❌ Неправильний формат. Використовуйте ДД.ММ.РРРР (наприклад, 31.05.2026). Або /cancel');
   }
-
+  // Хелпер — надсилає одне повідомлення з retry при 429
+const sendWithRetry = async (fn: () => Promise<unknown>): Promise<'ok' | 'fail'> => {
+    let attempts = 0;
+    while (attempts < 3) {
+      try {
+        await fn();
+        return 'ok';
+      } catch (err: any) {
+        if (err?.error_code === 429) {
+          // Telegram каже "зачекай" — чекаємо і пробуємо ще раз
+          const waitMs = (err?.parameters?.retry_after ?? 5) * 1000;
+          console.warn(`⚠️ 429 Too Many Requests — чекаю ${waitMs}ms`);
+          await new Promise(res => setTimeout(res, waitMs));
+          attempts++;
+        } else {
+          // Юзер заблокував бота або інша помилка — пропускаємо
+          return 'fail';
+        }
+      }
+    }
+    return 'fail';
+  };
   // --- ОБРОБКА РОЗСИЛКИ ---
   if (state === 'waiting_for_broadcast') {
     adminState.delete(adminId);
     await ctx.reply('⏳ Починаю розсилку...');
 
     try {
-      // Оптимізація: завантажуємо ЛИШЕ telegramId (економить пам'ять)
       const users = await User.find({}).select('telegramId').lean();
       let successCount = 0;
       let failCount = 0;
 
       for (const user of users) {
-        try {
-          await ctx.copyMessage(user.telegramId);
-          successCount++;
-        } catch (err) {
-          // Юзер заблокував бота або видалив чат
-          failCount++;
-        } finally {
-          // ⚠️ НАЙВАЖЛИВІШЕ: Пауза ПОВИННА бути тут. 
-          // Вона спрацює навіть якщо юзер заблокував бота!
-          await new Promise((res) => setTimeout(res, 50));
-        }
+        const result = await sendWithRetry(() => ctx.copyMessage(user.telegramId));
+        result === 'ok' ? successCount++ : failCount++;
+        await new Promise(res => setTimeout(res, 50));
       }
 
       return ctx.reply(
