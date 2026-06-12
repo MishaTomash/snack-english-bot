@@ -48,6 +48,7 @@ export const handleSeasonAdminMenu = async (ctx: Context) => {
     return ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };
 
+
 // ===== Завершити сезон зараз =====
 export const handleSeasonEndRequest = async (ctx: Context) => {
     if (!isAdmin(ctx.from?.id)) return ctx.answerCallbackQuery({ text: '⛔ Немає доступу', show_alert: true });
@@ -138,6 +139,7 @@ export const handleSeasonCreateNew = async (ctx: Context) => {
         `✅ Сезон №${seasonNumber} створено!\nЗавершується: ${endDate.toLocaleString('uk-UA')}`,
     );
 };
+
 // ===== Зміна дати завершення =====
 export const handleSeasonSetDateRequest = async (ctx: Context) => {
     const adminId = ctx.from?.id;
@@ -196,6 +198,7 @@ export const handlePendingTextInput = async (ctx: Context): Promise<boolean> => 
     await ctx.reply(`✅ Дату встановлено: ${newDate.toLocaleString('uk-UA')}`);
     return true;
 };
+
 
 // ===== Реєстрація 
 export const registerSeasonAdminHandlers = (bot: Bot) => {

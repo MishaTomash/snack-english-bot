@@ -1,14 +1,11 @@
 import { Context, InlineKeyboard, NextFunction } from 'grammy';
 import { User } from '../../models/User';
 import { getRandomTest, getTestForLearnedWords, resetAndGetLearnedTest } from '../../services/testService';
-import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
 import { TestQuestion } from '../../models/TestQuestion';
 
-const escapeMarkdownV2 = (text: string): string =>
-  text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+// escapeMarkdownV2 більше не потрібна — видалено
 
-// ─── Хелпер: inline-клавіатура варіантів відповіді ───────────────────────────
 type TestSource = 'general' | 'learned' | 'repeat';
 
 const buildTestKeyboard = (
@@ -28,14 +25,15 @@ const buildTestKeyboard = (
 export const sendTestMessage = async (
   ctx: Context,
   testData: any,
-  source: TestSource, // 'general' або 'learned_words'
+  source: TestSource,
 ) => {
   const questionText = testData.question.replace(/___/g, '…');
-  const safeQuestion = escapeMarkdownV2(questionText);
 
-  // 1. Різні заголовки залежно від типу тесту
-  const title = source === 'general' ? '😏 *Не підглядай!*' : '🤔 *Ну що, памʼятаєш?*';
-  const message = `${title}\n\n${safeQuestion}`;
+  const title = source === 'general'
+    ? '😏 <b>Не підглядай!</b>'
+    : '🤔 <b>Ну що, памʼятаєш?</b>';
+
+  const message = `${title}\n\n${questionText}`;
 
   const keyboard = buildTestKeyboard(
     testData._id.toString(),
@@ -44,30 +42,29 @@ export const sendTestMessage = async (
     source,
   );
 
-  // 👇 НОВЕ: Додаємо кнопку пояснення, якщо воно є в базі
   if (testData.explanation) {
     keyboard.row().text('💡 Пояснення', `explain_test_${testData._id}_${source}`);
   }
 
   if (ctx.callbackQuery) {
     await ctx
-      .editMessageText(message, { reply_markup: keyboard, parse_mode: 'MarkdownV2' })
+      .editMessageText(message, { reply_markup: keyboard, parse_mode: 'HTML' })
       .catch((err: any) => {
         if (!err?.description?.includes('message is not modified')) {
           console.error('editMessageText error:', err);
         }
       });
   } else {
-    await ctx.reply(message, { reply_markup: keyboard, parse_mode: 'MarkdownV2' });
+    await ctx.reply(message, { reply_markup: keyboard, parse_mode: 'HTML' });
   }
 };
 
 // ─── Екран "Всі тести пройдено" ──────────────────────────────────────────────
 const sendAllDoneMessage = async (ctx: Context) => {
   const text =
-    '✅ *Ти вже пройшов усі тести до вивчених слів\\!*\n\n' +
+    '✅ <b>Ти вже пройшов усі тести до вивчених слів!</b>\n\n' +
     'Можеш повторити їх ще раз для закріплення — ' +
-    'або вивчи нові слова щоб отримати нові тести\\. 💪';
+    'або вивчи нові слова щоб отримати нові тести. 💪';
 
   const keyboard = new InlineKeyboard()
     .text('🔁 Повторити знову', 'learned_test_repeat')
@@ -76,21 +73,19 @@ const sendAllDoneMessage = async (ctx: Context) => {
 
   if (ctx.callbackQuery) {
     await ctx
-      .editMessageText(text, { parse_mode: 'MarkdownV2', reply_markup: keyboard })
-      .catch(() =>
-        ctx.reply(text, { parse_mode: 'MarkdownV2', reply_markup: keyboard }),
-      );
+      .editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard })
+      .catch(() => ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard }));
   } else {
-    await ctx.reply(text, { parse_mode: 'MarkdownV2', reply_markup: keyboard });
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
   }
 };
 
-// ─── Загальні міні-тести (🎯 Міні-тести) ─────────────────────────────────────
+// ─── Загальні міні-тести ──────────────────────────────────────────────────────
 export const sendRandomTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
 
   try {
     const user = await User.findOne({ telegramId });
@@ -109,21 +104,21 @@ export const sendRandomTest = async (ctx: Context) => {
       { _id: user._id },
       {
         $inc: { testsTakenToday: 1 },
-        $set: { lastTestDate: new Date() }
+        $set: { lastTestDate: new Date() },
       }
     );
   } catch (error: any) {
     console.error('Помилка при видачі тесту:', error);
-    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => { });
+    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => {});
   }
 };
 
-// ─── Тести до вивчених слів (🧪 Тести до слів) ───────────────────────────────
+// ─── Тести до вивчених слів ───────────────────────────────────────────────────
 export const sendLearnedWordsTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
 
   try {
     const user = await User.findOne({ telegramId });
@@ -133,9 +128,9 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
 
     if (!user.seenWords || user.seenWords.length === 0) {
       return ctx.reply(
-        '📭 *Ти ще не вивчив жодного слова\\!*\n\n' +
-        'Спочатку вивчи кілька слів через «📚 Вчити слова», щоб тут з\'явились тести саме для них\\.',
-        { parse_mode: 'MarkdownV2' },
+        '📭 <b>Ти ще не вивчив жодного слова!</b>\n\n' +
+        'Спочатку вивчи кілька слів через «📚 Вчити слова», щоб тут з\'явились тести саме для них.',
+        { parse_mode: 'HTML' },
       );
     }
 
@@ -143,10 +138,10 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
 
     if (!result) {
       return ctx.reply(
-        '😔 *Тестів для твоїх вивчених слів ще немає\\.*\n\n' +
-        'Адміністратор ще не додав тести для слів які ти вчив\\. ' +
-        'Спробуй «🎯 Міні\\-тести» — там є загальні тести для твого рівня\\.',
-        { parse_mode: 'MarkdownV2' },
+        '😔 <b>Тестів для твоїх вивчених слів ще немає.</b>\n\n' +
+        'Адміністратор ще не додав тести для слів які ти вчив. ' +
+        'Спробуй «🎯 Міні-тести» — там є загальні тести для твого рівня.',
+        { parse_mode: 'HTML' },
       );
     }
 
@@ -157,16 +152,16 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
     await sendTestMessage(ctx, result.test, 'learned');
   } catch (error: any) {
     console.error('Помилка при видачі тесту до слів:', error);
-    await ctx.reply('Вибач, сталася помилка. Спробуй пізніше.').catch(() => { });
+    await ctx.reply('Вибач, сталася помилка. Спробуй пізніше.').catch(() => {});
   }
 };
 
-// ─── Повторення тестів до слів (після того як всі пройдено) ──────────────────
+// ─── Повторення тестів до слів ────────────────────────────────────────────────
 export const handleLearnedTestRepeat = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => { });
+  await ctx.answerCallbackQuery().catch(() => {});
 
   try {
     const user = await User.findOne({ telegramId });
@@ -181,7 +176,7 @@ export const handleLearnedTestRepeat = async (ctx: Context) => {
     await sendTestMessage(ctx, testData, 'repeat');
   } catch (error: any) {
     console.error('Помилка при повторенні тестів:', error);
-    await ctx.reply('Вибач, сталася помилка.').catch(() => { });
+    await ctx.reply('Вибач, сталася помилка.').catch(() => {});
   }
 };
 
@@ -211,31 +206,28 @@ export const handleTestAnswer = async (ctx: Context) => {
     }
   }
 
-  await ctx.answerCallbackQuery({
-    text: alertText,
-    show_alert: showAlert,
-  }).catch(() => { });
+  await ctx.answerCallbackQuery({ text: alertText, show_alert: showAlert }).catch(() => {});
 
   if (!isCorrect) return;
 
-  // 🔥 ГОЛОВНА ЗМІНА: Перевіряємо ліміт ТІЛЬКИ для 'general' тестів!
-  // Тести 'learned' (до вивчених слів) тепер завжди проходять далі.
   if (source === 'general') {
     const user = await User.findOne({ telegramId });
     const FREE_TESTS_LIMIT = 10;
-
     const isLimitReached = user && !user.isPremium && (user.testsTakenToday >= FREE_TESTS_LIMIT);
 
     if (isLimitReached) {
-      const limitMsg = `🛑 <b>Ліміт на сьогодні — край!</b>\n\nТи пройшов <b>${FREE_TESTS_LIMIT}</b> тестів безкоштовно. Це більше, ніж домашок за тиждень. 🎉\n\n💎 <b>Premium</b> знімає ліміт — тестуй до ночі, бот не засне.`;
+      const limitMsg =
+        `🛑 <b>Ліміт на сьогодні — край!</b>\n\n` +
+        `Ти пройшов <b>${FREE_TESTS_LIMIT}</b> тестів безкоштовно. Це більше, ніж домашок за тиждень. 🎉\n\n` +
+        `💎 <b>Premium</b> знімає ліміт — тестуй до ночі, бот не засне.`;
+
       return await ctx.reply(limitMsg, {
         parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu')
-      }).catch(() => { });
+        reply_markup: new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu'),
+      }).catch(() => {});
     }
   }
 
-  // --- Автоматичний перехід до наступного питання ---
   if (source === 'general') {
     await sendRandomTest(ctx);
   } else if (source === 'learned') {
@@ -250,7 +242,7 @@ export const handleNextRepeatTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => { });
+  await ctx.answerCallbackQuery().catch(() => {});
 
   try {
     const user = await User.findOne({ telegramId });
@@ -272,13 +264,10 @@ export const handleNextRepeatTest = async (ctx: Context) => {
   }
 };
 
-
-
+// ─── Пояснення ────────────────────────────────────────────────────────────────
 export const handleExplainTest = async (ctx: Context) => {
-  // Перевірка наявності match
   if (!ctx.match || !ctx.match[1]) return;
 
-  // Розбиваємо дані: ID тесту та джерело (general або learned_words)
   const matchData = (ctx.match[1] as string).split('_');
   const testId = matchData[0];
   const source = matchData[1] || 'general';
@@ -289,23 +278,19 @@ export const handleExplainTest = async (ctx: Context) => {
       return ctx.answerCallbackQuery({ text: 'На жаль, пояснення не знайдено 😔', show_alert: true });
     }
 
-    // Клавіатура для повернення назад (передаємо і ID, і source)
-    const backKeyboard = new InlineKeyboard().text('🔙 Назад до тесту', `back_to_test_${testId}_${source}`);
+    const backKeyboard = new InlineKeyboard()
+      .text('🔙 Назад до тесту', `back_to_test_${testId}_${source}`);
 
-    // Використовуємо HTML для пояснення, щоб уникнути помилок з Markdown
     await ctx.editMessageText(
       `💡 <b>Підглядаєш? Ну-ну 😏</b>\n\n${test.explanation}`,
-      {
-        parse_mode: 'HTML',
-        reply_markup: backKeyboard
-      }
-    ).catch(() => { });
+      { parse_mode: 'HTML', reply_markup: backKeyboard }
+    ).catch(() => {});
   } catch (err) {
     console.error('Помилка показу пояснення:', err);
   }
 };
 
-// 🔙 Хендлер для кнопки "Назад до тесту"
+// ─── Назад до тесту ───────────────────────────────────────────────────────────
 export const handleBackToTest = async (ctx: Context) => {
   if (!ctx.match || !ctx.match[1]) return;
 
@@ -319,15 +304,13 @@ export const handleBackToTest = async (ctx: Context) => {
       return ctx.answerCallbackQuery({ text: 'Тест не знайдено', show_alert: true });
     }
 
-    // Викликаємо твою ж функцію генерації тесту!
     await sendTestMessage(ctx, testData, source);
   } catch (err) {
     console.error('Помилка повернення до тесту:', err);
   }
 };
 
-
-
+// ─── Ліміт тестів ─────────────────────────────────────────────────────────────
 export const checkTestLimits = async (ctx: Context, next: NextFunction) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return await next();
@@ -335,7 +318,6 @@ export const checkTestLimits = async (ctx: Context, next: NextFunction) => {
   const user = await User.findOne({ telegramId });
   if (!user) return await next();
 
-  // Premium-юзери проходять без лімітів
   if (user.isPremium) return await next();
 
   const FREE_TESTS_LIMIT = 10;
@@ -345,27 +327,25 @@ export const checkTestLimits = async (ctx: Context, next: NextFunction) => {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const lastTestDay = new Date(lastTest.getFullYear(), lastTest.getMonth(), lastTest.getDate());
 
-  // Скидаємо лічильник, якщо настав новий день
   if (today.getTime() > lastTestDay.getTime()) {
     user.testsTakenToday = 0;
     await user.save();
   }
 
-  // Якщо ліміт вичерпано
   if (user.testsTakenToday >= FREE_TESTS_LIMIT) {
-    const message = `🛑 Ти вичерпав свій денний ліміт безкоштовних тестів (<b>${FREE_TESTS_LIMIT} тестів</b>).\n\n` +
+    const message =
+      `🛑 Ти вичерпав свій денний ліміт безкоштовних тестів (<b>${FREE_TESTS_LIMIT} тестів</b>).\n\n` +
       `💎 Оформи Premium, щоб проходити необмежену кількість тестів та швидше покращувати свою англійську!`;
 
     const keyboard = new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu');
 
     if (ctx.callbackQuery) {
-      await ctx.answerCallbackQuery({ text: 'Денний ліміт тестів вичерпано 🛑', show_alert: true }).catch(() => { });
-      return await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => { });
+      await ctx.answerCallbackQuery({ text: 'Денний ліміт тестів вичерпано 🛑', show_alert: true }).catch(() => {});
+      return await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
     }
 
     return await ctx.reply(message, { parse_mode: 'HTML', reply_markup: keyboard });
   }
 
-  // Якщо ліміт не вичерпано — пропускаємо далі
   await next();
 };

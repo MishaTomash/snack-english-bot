@@ -8,7 +8,7 @@ export const handleLevelSelection = async (ctx: Context) => {
   if (!callbackData || !telegramId) return;
 
   // ✅ Відповідаємо на callback одразу — до будь-яких БД запитів
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   const level = callbackData.split('_')[1];
 
@@ -22,14 +22,13 @@ export const handleLevelSelection = async (ctx: Context) => {
   // ✅ .catch() — якщо користувач натиснув той самий рівень вдруге, не крашимось
   await ctx
     .editMessageText(
-      `✅ Супер\\! Твій рівень встановлено: *${level}*\\.\n\nТепер я буду підбирати матеріали спеціально для тебе\\!`,
-      { parse_mode: 'MarkdownV2' },
+      `✅ Супер! Твій рівень встановлено: <b>${level}</b>.\n\nТепер я буду підбирати матеріали спеціально для тебе!`,
+      { parse_mode: 'HTML' },
     )
     .catch((err: any) => {
       if (!err?.description?.includes('message is not modified')) {
         console.error('Помилка editMessageText при виборі рівня:', err);
       }
-      // Якщо повідомлення не змінилось — мовчки ігноруємо
     });
 
   await ctx.reply('Обери, з чого почнемо сьогодні? 👇', {
