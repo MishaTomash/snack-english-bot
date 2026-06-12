@@ -34,6 +34,10 @@ export interface IUser extends Document {
     hasCompletedMinAction: boolean;
     isBlocked: boolean;
     lastRemindedAt: Date;
+    freeTopicWordsLearned: number;
+    seenTopicWords: Schema.Types.ObjectId[];
+    testsTakenToday: number;
+    lastTestDate?: Date;
 }
 
 const UserSchema: Schema = new Schema({
@@ -68,7 +72,11 @@ const UserSchema: Schema = new Schema({
     referralRewardClaimed: { type: Boolean, default: false },
     hasCompletedMinAction: { type: Boolean, default: false },
     isBlocked: { type: Boolean, default: false },
-    lastRemindedAt: { type: Date }
+    lastRemindedAt: { type: Date },
+    freeTopicWordsLearned: { type: Number, default: 0 },
+    seenTopicWords: { type: [Schema.Types.ObjectId], default: [] },
+    testsTakenToday: { type: Number, default: 0 },
+    lastTestDate: { type: Date },
 });
 
 // ✅ ОПТИМІЗАЦІЯ: Складені індекси для швидких запитів

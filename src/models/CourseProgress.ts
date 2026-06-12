@@ -2,26 +2,18 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICourseProgress extends Document {
   telegramId: number;
-  courseSlug: string;
-  currentLesson: number;   // індекс уроку (0-based)
-  completed: boolean;
-  reviewDate?: Date;       // коли нагадати повторити
-  purchasedAt?: Date;      // коли куплено (null = безкоштовний)
+  courseId: mongoose.Types.ObjectId;
+  viewedVideos: string[]; 
+  completedTests: string[];
 }
 
-const CourseProgressSchema = new Schema<ICourseProgress>(
-  {
-    telegramId: { type: Number, required: true },
-    courseSlug: { type: String, required: true },
-    currentLesson: { type: Number, default: 0 },
-    completed: { type: Boolean, default: false },
-    reviewDate: { type: Date },
-    purchasedAt: { type: Date },
-  },
-  { timestamps: true },
-);
+const CourseProgressSchema = new Schema<ICourseProgress>({
+  telegramId: { type: Number, required: true },
+  courseId: { type: Schema.Types.ObjectId, ref: 'Course', required: true },
+  viewedVideos: { type: [String], default: [] },
+completedTests: [{ type: String, default: [] }]
+});
 
-// Один запис на юзера + курс
-CourseProgressSchema.index({ telegramId: 1, courseSlug: 1 }, { unique: true });
+CourseProgressSchema.index({ telegramId: 1, courseId: 1 }, { unique: true });
 
 export const CourseProgress = mongoose.model<ICourseProgress>('CourseProgress', CourseProgressSchema);

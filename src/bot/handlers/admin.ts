@@ -118,139 +118,157 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
   const textData = ctx.message?.text;
   if (!textData) return next();
 
-  // ── 1. СЛОВО (з опціональним прив'язаним тестом) ─────────────────────────
-if (textData.startsWith('word:')) {
+// ── 1. БАГАТО СЛІВ (з опціональними прив'язаними тестами) ─────────────────
+  if (textData.includes('word:')) {
     try {
-      const parts = textData.replace('word:', '').trim().split('|').map((s) => s.trim());
+      // Розбиваємо повідомлення на рядки і беремо тільки ті, що починаються на 'word:'
+      const lines = textData.split('\n').filter(line => line.trim().startsWith('word:'));
+      
+      if (lines.length === 0) return;
 
-      // Трохи оновив текст помилки, щоб адмін знав про 8-ме поле
-      if (parts.length < 4) {
-        return ctx.reply(
-          '❌ Потрібно мінімум 4 поля:\n`word: рівень | англ | укр | транскрипція`\n\nАбо 7-8 полів для слова + тест:\n`word: рівень | англ | укр | транскр | питання | варіанти | правильна | пояснення (необов.)`',
-          { parse_mode: 'Markdown' },
-        );
-      }
+      let wordsAdded = 0;
+      let testsAdded = 0;
+      const errors: string[] = [];
 
-      // 👇 ДОДАНО: витягуємо explanation як 8-й елемент
-      const [inputLevel, english, ukrainian, transcription, question, rawOptions, correctAnswerText, explanation] = parts;
+      for (const line of lines) {
+        try {
+          const parts = line.replace('word:', '').trim().split('|').map((s) => s.trim());
 
-      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
-        return ctx.reply(
-          `❌ Невідомий рівень: *${inputLevel}*. Дозволені: ${ALLOWED_LEVELS.join(', ')}`,
-          { parse_mode: 'Markdown' },
-        );
-      }
-
-      // Зберігаємо слово
-      const newWord = await Word.create({
-        level: inputLevel as Level,
-        english,
-        ukrainian,
-        transcription,
-      });
-
-      // Якщо передані поля тесту — зберігаємо тест прив'язаний до цього слова
-      let testSaved = false;
-      if (question && rawOptions && correctAnswerText) {
-        const options = rawOptions.split(',').map((s) => s.trim());
-
-        if (options.length < 2) {
-          await ctx.reply('⚠️ Слово збережено, але тест має хоча б 2 варіанти. Тест не збережено.');
-        } else {
-          const correctOptionIndex = options.indexOf(correctAnswerText);
-          if (correctOptionIndex === -1) {
-            await ctx.reply(
-              `⚠️ Слово збережено, але правильна відповідь \`${correctAnswerText}\` не знайдена серед варіантів. Тест не збережено.`,
-              { parse_mode: 'Markdown' },
-            );
-          } else {
-            await TestQuestion.create({
-              level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2', // Явне приведення типу
-              question,
-              options,
-              correctOptionIndex,
-              wordId: newWord._id,  // 🔗 Прив'язка до слова
-              explanation: explanation ? explanation : undefined // 👈 ДОДАНО: записуємо пояснення
-            });
-            testSaved = true;
+          if (parts.length < 4) {
+            errors.push(`⚠️ Мало полів у рядку: \`${line.substring(0, 20)}...\``);
+            continue; // Пропускаємо цей рядок, але йдемо далі
           }
+
+          const [inputLevel, english, ukrainian, transcription, question, rawOptions, correctAnswerText, explanation] = parts;
+
+          if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
+            errors.push(`⚠️ Невідомий рівень *${inputLevel}* у слові: ${english}`);
+            continue;
+          }
+
+          // Зберігаємо слово
+          const newWord = await Word.create({
+            level: inputLevel as Level,
+            english,
+            ukrainian,
+            transcription,
+          });
+          wordsAdded++;
+
+          // Якщо передані поля тесту — зберігаємо тест
+          if (question && rawOptions && correctAnswerText) {
+            const options = rawOptions.split(',').map((s) => s.trim());
+
+            if (options.length < 2) {
+              errors.push(`⚠️ Слово *${english}* додано, але тест пропущено (менше 2 варіантів).`);
+            } else {
+              const correctOptionIndex = options.indexOf(correctAnswerText);
+              if (correctOptionIndex === -1) {
+                errors.push(`⚠️ Слово *${english}* додано, але правильна відповідь не знайдена в тесті.`);
+              } else {
+                await TestQuestion.create({
+                  level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+                  question,
+                  options,
+                  correctOptionIndex,
+                  wordId: newWord._id,  // 🔗 Прив'язка до слова
+                  explanation: explanation ? explanation : undefined
+                });
+                testsAdded++;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Помилка додавання рядка:', err);
+          errors.push(`❌ Помилка сервера при обробці: \`${line.substring(0, 20)}...\``);
         }
       }
 
-      const successMsg = testSaved
-        ? `✅ *Слово і тест успішно збережено!*\n\n🔗 Тест прив'язаний до слова «${english}»`
-        : `✅ *Слово успішно додано!*\n\n_(Тест не додавався — передані лише базові поля)_`;
+      // Формуємо фінальний звіт
+      let finalMessage = `✅ *Масове додавання завершено!*\n\n📚 Додано слів: *${wordsAdded}*\n🎯 Додано тестів: *${testsAdded}*`;
+      
+      if (errors.length > 0) {
+        finalMessage += `\n\n⚠️ *Попередження:*\n${errors.join('\n')}`;
+      }
 
-      return ctx.reply(successMsg, { parse_mode: 'Markdown' });
+      return ctx.reply(finalMessage, { parse_mode: 'Markdown' });
 
     } catch (error) {
-      console.error('Помилка додавання слова:', error);
-      return ctx.reply('❌ Помилка при збереженні.');
+      console.error('Помилка масового додавання:', error);
+      return ctx.reply('❌ Сталася критична помилка при масовому збереженні.');
     }
   }
 
-  // ── 2. ТЕСТ (загальний, без прив'язки до слова) ───────────────────────────
+// ── 2. ТЕСТ (загальний, без прив'язки до слова) ───────────────────────────
   if (textData.includes('test:')) {
     try {
       // Розбиваємо весь текст на рядки і беремо тільки ті, що починаються на 'test:'
       const lines = textData.split('\n').filter(line => line.trim().startsWith('test:'));
+      
+      if (lines.length === 0) return; // Якщо тестів немає, йдемо далі
 
       let addedCount = 0;
       let errors: string[] = [];
 
       for (const line of lines) {
-        const parts = line.replace('test:', '').trim().split('|').map((s) => s.trim());
+        try {
+          const parts = line.replace('test:', '').trim().split('|').map((s) => s.trim());
 
-        // Перевіряємо чи є хоча б 4 поля (пояснення - 5-те, воно не обов'язкове)
-        if (parts.length < 4) {
-          errors.push(`❌ Мало полів: ${line}`);
-          continue;
+          // Перевіряємо чи є хоча б 4 поля (пояснення - 5-те, воно не обов'язкове)
+          if (parts.length < 4) {
+            errors.push(`❌ Мало полів у рядку: <code>${line.substring(0, 30)}...</code>`);
+            continue;
+          }
+
+          const [inputLevel, question, rawOptions, correctAnswerText, explanation] = parts;
+
+          if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(inputLevel)) {
+            errors.push(`❌ Невідомий рівень (<b>${inputLevel}</b>) для: <code>${question}</code>`);
+            continue;
+          }
+
+          const options = rawOptions.split(',').map((s) => s.trim());
+          if (options.length < 2) {
+            errors.push(`❌ Мало варіантів (мінімум 2) для: <code>${question}</code>`);
+            continue;
+          }
+
+          const correctOptionIndex = options.indexOf(correctAnswerText);
+          if (correctOptionIndex === -1) {
+            errors.push(`❌ Відповідь '<b>${correctAnswerText}</b>' не знайдена серед варіантів: <code>${question}</code>`);
+            continue;
+          }
+
+          // Створюємо тест, додаємо пояснення якщо воно є
+          await TestQuestion.create({
+            level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
+            question,
+            options,
+            correctOptionIndex,
+            explanation: explanation && explanation.trim() !== '' ? explanation.trim() : undefined
+          });
+
+          addedCount++;
+        } catch (err) {
+          console.error('Помилка обробки рядка тесту:', err);
+          errors.push(`❌ Внутрішня помилка обробки: <code>${line.substring(0, 30)}...</code>`);
         }
-
-        const [inputLevel, question, rawOptions, correctAnswerText, explanation] = parts;
-
-        if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(inputLevel)) {
-          errors.push(`❌ Невідомий рівень (${inputLevel}): ${line}`);
-          continue;
-        }
-
-        const options = rawOptions.split(',').map((s) => s.trim());
-        if (options.length < 2) {
-          errors.push(`❌ Мало варіантів: ${line}`);
-          continue;
-        }
-
-        const correctOptionIndex = options.indexOf(correctAnswerText);
-        if (correctOptionIndex === -1) {
-          errors.push(`❌ Відповідь '${correctAnswerText}' не знайдена: ${line}`);
-          continue;
-        }
-
-        // Створюємо тест, додаємо пояснення якщо воно є
-
-        await TestQuestion.create({
-          level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2', // 👈 Явно вказуємо тип для TypeScript
-          question,
-          options,
-          correctOptionIndex,
-          explanation: explanation ? explanation : undefined // 👈 Передаємо undefined замість null
-        });
-
-        addedCount++;
       }
 
-      let replyText = `✅ *Успішно додано тестів: ${addedCount}*\n`;
+      // 🔥 ЗМІНЕНО: Використовуємо HTML, щоб `___` у текстах не ламали бота!
+      let replyText = `✅ <b>Успішно додано тестів: ${addedCount}</b>\n`;
       if (errors.length > 0) {
-        replyText += `\n⚠️ *Помилки в таких рядках:*\n${errors.join('\n')}`;
+        // Екрануємо спецсимволи < і >, щоб не зламати HTML
+        const safeErrors = errors.map(e => e.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+        replyText += `\n⚠️ <b>Помилки:</b>\n${safeErrors.join('\n')}`;
       }
 
-      return ctx.reply(replyText, { parse_mode: 'Markdown' });
+      return ctx.reply(replyText, { parse_mode: 'HTML' });
     } catch (error) {
-      console.error('Помилка додавання тесту:', error);
-      return ctx.reply('❌ Помилка при збереженні тесту.');
+      console.error('Критична помилка додавання тестів:', error);
+      return ctx.reply('❌ <b>Помилка при збереженні тестів на сервері.</b>', { parse_mode: 'HTML' });
     }
   }
-
   // ── 3. ТЕКСТ ──────────────────────────────────────────────────────────────
   if (textData.startsWith('text:')) {
     try {
@@ -373,104 +391,6 @@ export const handleBroadcastStart = async (ctx: Context) => {
   await ctx.reply(
     '📢 <b>Режим розсилки</b>\n\nВідправ повідомлення для розсилки.\n\n<i>Для скасування напиши /cancel</i>',
     { parse_mode: 'HTML' },
-  );
-};
-
-
-// ─── Управління ТОПом ────────────────────────────────────────────────────────
-
-export const handleAdminTopMenu = async (ctx: Context) => {
-  if (!isAdmin(ctx)) return;
-
-  let cycle = await TopCycle.findOne({ isActive: true });
-  if (!cycle) {
-    const nextDate = new Date();
-    nextDate.setDate(nextDate.getDate() + 30);
-    cycle = await TopCycle.create({ endDate: nextDate, seasonNumber: 1, totalStars: 0 });
-  }
-
-  const premiumUsersCount = await User.countDocuments({ isPremium: true });
-
-  // Беремо СПРАВЖНЮ кількість зірок з бази даних (скільки реально заплатили люди)
-  const realTotalStars = cycle.totalStars || 0;
-
-  // Формула розрахунку реального прибутку. 
-  // Telegram виплачує розробникам 0.013 USD за 1 зірку (вже після комісії Apple/Google 30%). 
-  // При курсі ~40 грн/долар, це приблизно 0.52 грн чистого прибутку за 1 зірку.
-  const UAH_PER_STAR = 0.52;
-  const totalUah = Math.floor(realTotalStars * UAH_PER_STAR);
-
-  const text = `🏆 <b>Управління ТОПом (Сезон ${cycle.seasonNumber})</b>\n\n` +
-    `📅 Дата завершення: <b>${cycle.endDate.toLocaleDateString('uk-UA')}</b>\n` +
-    `👥 Продано Premium цього сезону: <b>${premiumUsersCount}</b>\n\n` +
-    `📊 <b>Справжня фінансова статистика:</b>\n` +
-    `⭐ Отримано зірок: <b>${realTotalStars} XTR</b>\n` +
-    `💰 Ваш чистий прибуток: <b>~${totalUah} грн</b>\n\n` +
-    `Оберіть дію:`;
-
-  const kb = new InlineKeyboard()
-    .text('📅 Змінити дату', 'adm_top_set_date').row()
-    .text('🛑 Завершити сезон зараз', 'adm_top_end');
-
-  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
-};
-export const handleAdminTopSetDatePrompt = async (ctx: Context) => {
-  if (!isAdmin(ctx)) return;
-  await ctx.answerCallbackQuery();
-  adminState.set(ctx.from!.id, 'waiting_for_top_date');
-  await ctx.reply('📅 Надішли нову дату завершення ТОПу у форматі: <code>ДД.ММ.РРРР</code> (наприклад: <code>31.05.2026</code>)', { parse_mode: 'HTML' });
-};
-
-export const handleAdminTopEnd = async (ctx: Context) => {
-  if (!isAdmin(ctx)) return;
-  await ctx.answerCallbackQuery();
-
-  // 1. Формуємо результати ТОПу
-  const topUsers = await User.find({ isPremium: true, seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).limit(5).lean();
-  let resultText = `🏆 <b>РЕЗУЛЬТАТИ СЕЗОНУ!</b>\n\n`;
-  topUsers.forEach((u, i) => {
-    const name = u.username ? `@${u.username}` : (u.firstName || 'Анонім');
-    resultText += `${i + 1}. ${escapeHtml(name)} - <b>${u.seasonXp}</b> балів\n`;
-  });
-
-  if (topUsers.length === 0) resultText += `Ніхто не брав участі 😔`;
-
-  await ctx.reply(resultText, { parse_mode: 'HTML' });
-
-  // 2. 🌟 ОНОВЛЕНО: Скидаємо ТОП-статистику ТА реферальний прогрес абсолютно всім користувачам!
-  await User.updateMany(
-    {},
-    {
-      isPremium: false,
-      premiumExpiresAt: null,
-      seasonXp: 0,
-      referralCount: 0,                  // 👈 Скидаємо лічильник друзів на 0/3
-      referralRewardClaimed: false,       // 👈 Дозволяємо знову забрати Premium за друзів у новому сезоні
-      hasCompletedMinAction: false        // 👈 Анулюємо статус виконання дії для чистого старту
-    }
-  );
-
-  // 3. Запускаємо новий сезон у таблиці циклів
-  const oldCycle = await TopCycle.findOne({ isActive: true });
-  if (oldCycle) {
-    oldCycle.isActive = false;
-    await oldCycle.save();
-  }
-
-  const nextDate = new Date();
-  nextDate.setDate(nextDate.getDate() + 30);
-  await TopCycle.create({
-    seasonNumber: (oldCycle?.seasonNumber || 0) + 1,
-    endDate: nextDate,
-    isActive: true,
-    totalStars: 0
-  });
-
-  await ctx.reply(
-    '✅ <b>Сезон успішно завершено!</b>\n\n' +
-    'Усім користувачам анульовано старий Premium, скинуто бали сезону, а також ' +
-    '<b>обнулено реферальний прогрес (0/3)</b>, щоб вони могли знову кликати друзів і змагатися! 🚀',
-    { parse_mode: 'HTML' }
   );
 };
 

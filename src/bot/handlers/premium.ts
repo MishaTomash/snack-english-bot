@@ -33,7 +33,10 @@ export const sendPremiumMenu = async (ctx: Context) => {
   const keyboard = new InlineKeyboard()
     .text('💳 Оплатити на картку (30 грн)', 'pay_card')
     .row()
-    .text('⭐ Оплатити Зірками (75 ⭐️)', 'pay_stars');
+    .text('⭐ Оплатити Зірками (75 ⭐️)', 'pay_stars')
+    .row()
+    .text('Отримати БЕЗКОШТОВНО (30 грн)', 'pay_referral')
+    ;
 
   await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };

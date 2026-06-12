@@ -4,6 +4,8 @@ import { getRandomWords } from '../../services/wordService';
 import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
 import { checkAndRewardReferrer } from './referrals';
+import { Word } from "../../models/Word"
+import  mongoose  from 'mongoose';
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
@@ -66,7 +68,7 @@ export const handleWords = async (ctx: Context) => {
       const limitKeyboard = new InlineKeyboard()
         .text('🔔 Нагадати завтра', 'reminder_tomorrow')
         .row()
-        .text('💎 Отримати Premium', 'buy_premium');
+        .text('💎 Отримати Premium', 'open_premium_menu');
 
       if (ctx.callbackQuery) {
         return ctx.editMessageText(limitMsg, {
@@ -95,21 +97,18 @@ export const handleWords = async (ctx: Context) => {
 
     const word = words[0];
 
-    const message =
-      `📚 *Твоє слово на сьогодні (${user.level})*\n\n` +
-      `🇺🇦 ${word.ukrainian}\n` +
-      `🇬🇧 ${word.english}\n` +
-      `🔊 ${word.transcription}`;
+const message = `📚 <b>Твоє слово на сьогодні (${user.level})</b>\n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Переклад:\n🇺🇦 ${word.ukrainian}`;
 
+    // 🌟 ЗМІНЕНО: Тепер кнопка передає ID нового слова!
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)
       .text('💾 Зберегти', `save_word_${word._id}`)
       .row()
-      .text('➡️ Наступне слово', 'next_word');
+      .text('➡️ Наступне слово', `next_word_${word._id}`);
 
     if (ctx.callbackQuery) {
       await ctx.editMessageText(message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: keyboard,
       }).catch(async (error: any) => {
         if (error?.description?.includes('message is not modified')) {
@@ -117,10 +116,12 @@ export const handleWords = async (ctx: Context) => {
         }
       });
     } else {
-      await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+      await ctx.reply(message, { parse_mode: 'HTML', reply_markup: keyboard });
     }
 
-    await updateUserProgress(telegramId, 'word', word._id.toString());
+    // 🌟 ВИДАЛЕНО: updateUserProgress(telegramId, 'word', word._id.toString());
+    // (Ми більше не зберігаємо слово наперед. Воно збережеться тільки коли юзер натисне "Наступне слово")
+
     await User.findByIdAndUpdate(user._id, {
       $set: {
         lastWordLearnDate: now,
@@ -174,9 +175,17 @@ export const handleWordAudio = async (ctx: Context) => {
 
   await ctx.answerCallbackQuery().catch(() => { });
 
-  const wordToPronounce = callbackData.substring('audio_'.length);
+  let wordToPronounce = callbackData.substring('audio_'.length);
 
   try {
+    // 1️⃣ ВИПРАВЛЕННЯ: Якщо це ID з бази даних, дістаємо справжнє англійське слово
+    if (mongoose.Types.ObjectId.isValid(wordToPronounce)) {
+      const wordDoc = await Word.findById(wordToPronounce).lean();
+      if (wordDoc) {
+        wordToPronounce = wordDoc.english;
+      }
+    }
+
     const user = await User.findOne({ telegramId });
 
     if (user?.lastAudioMessageId && ctx.chat?.id) {
