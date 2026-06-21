@@ -12,7 +12,7 @@ export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
         const previousWordId = ctx.callbackQuery.data.replace('next_word_', '');
         if (previousWordId && previousWordId !== 'next_word') {
             // Зберігаємо прогрес для слова, яке юзер щойно вивчив
-            await updateUserProgress(telegramId, 'word', previousWordId);
+            await updateUserProgress(telegramId, 'word');
             await User.findOneAndUpdate(
                 { telegramId },
                 { $addToSet: { seenWords: previousWordId } }
@@ -43,23 +43,23 @@ export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
     // Перевіряємо ліміт (він вже враховує +1 слово, яке ми щойно зберегли)
     if (user.wordsLearnedToday >= FREE_WORDS_LIMIT) {
         const message = `🛑 Ти вичерпав свій денний ліміт для безкоштовної версії (*${FREE_WORDS_LIMIT} слів*).\n\n` +
-                        `💎 Оформи Premium, щоб вчити необмежену кількість слів, отримувати озвучку та мати доступ до всіх функцій!`;
-        
+            `💎 Оформи Premium, щоб вчити необмежену кількість слів, отримувати озвучку та мати доступ до всіх функцій!`;
+
         const keyboard = new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu');
 
         // Якщо користувач клікнув інлайн-кнопку "Наступне слово"
         if (ctx.callbackQuery) {
             await ctx.answerCallbackQuery({ text: 'Денний ліміт вичерпано 🛑', show_alert: true });
-            return await ctx.editMessageText(message, { 
+            return await ctx.editMessageText(message, {
                 parse_mode: 'Markdown',
                 reply_markup: keyboard
             });
         }
 
         // Якщо користувач викликав через меню / команду
-        return await ctx.reply(message, { 
+        return await ctx.reply(message, {
             parse_mode: 'Markdown',
-            reply_markup: keyboard 
+            reply_markup: keyboard
         });
     }
 
