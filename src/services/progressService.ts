@@ -56,16 +56,16 @@ export const updateUserProgress = async (
 
     // 2️⃣ Безкінечне нарахування балів без лімітів
     if (activityType === 'word') {
-        gainedXp = 10;
+        gainedXp = 5;
         updateOps.$inc.wordsLearned = 1;
         updateOps.$inc.wordsLearnedToday = 1;
         updateOps.$set.lastWordLearnDate = now;
     }
     else if (activityType === 'test') {
-        gainedXp = 10;
+        gainedXp = 5;
         updateOps.$inc.testsPassed = 1;
         updateOps.$inc.testsTakenToday = 1;
-        updateOps.$inc.testXpEarnedToday = 10;
+        updateOps.$inc.testXpEarnedToday = 5;
         updateOps.$set.lastTestXpDate = now;
         updateOps.$set.lastTestDate = now;
     }
