@@ -15,7 +15,7 @@ export const handleLevelSelection = async (ctx: Context) => {
   await User.findOneAndUpdate(
     { telegramId },
     { level },
-    { returnDocument: 'after' }, // ✅ нова опція замість deprecated { new: true }
+    { returnDocument: 'after' },
   );
 
   // ✅ **text** — це MDv2, в legacy Markdown жирний це *text*

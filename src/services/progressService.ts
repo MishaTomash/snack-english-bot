@@ -11,13 +11,13 @@ export const getRankInfo = (xp: number) => {
         { level: 6, name: 'Професор', min: 3500, max: 5500 },
         { level: 7, name: 'Легенда', min: 5500, max: 9999999 },
     ];
-    
+
     return ranks.find(r => xp >= r.min && xp < r.max) || ranks[ranks.length - 1];
 };
 
 // ─── Основна логіка нарахування прогресу (БЕЗ ЛІМІТІВ) ───────────────────────
 export const updateUserProgress = async (
-    telegramId: number, 
+    telegramId: number,
     activityType: 'word' | 'test' | 'text'
 ) => {
     const user = await User.findOne({ telegramId });
@@ -25,7 +25,7 @@ export const updateUserProgress = async (
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     let gainedXp = 0;
     let streakBonusXp = 0;
 
@@ -36,7 +36,7 @@ export const updateUserProgress = async (
 
     // 1️⃣ Обробка Серії Днів (Streak) + Бонус за активність
     const lastActiveDate = user.lastActive ? new Date(user.lastActive.getFullYear(), user.lastActive.getMonth(), user.lastActive.getDate()) : null;
-    
+
     if (!lastActiveDate) {
         updateOps.$set.streak = 1;
     } else {
@@ -60,7 +60,7 @@ export const updateUserProgress = async (
         updateOps.$inc.wordsLearned = 1;
         updateOps.$inc.wordsLearnedToday = 1;
         updateOps.$set.lastWordLearnDate = now;
-    } 
+    }
     else if (activityType === 'test') {
         gainedXp = 10;
         updateOps.$inc.testsPassed = 1;
@@ -84,7 +84,7 @@ export const updateUserProgress = async (
         delete updateOps.$inc;
     }
 
-    await User.findOneAndUpdate({ telegramId }, updateOps, { new: true });
+    await User.findOneAndUpdate({ telegramId }, updateOps, { returnDocument: 'after' });
 
     return {
         gainedXp,
