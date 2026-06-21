@@ -85,7 +85,7 @@ export const sendRandomTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
 
   try {
     const user = await User.findOne({ telegramId });
@@ -109,7 +109,7 @@ export const sendRandomTest = async (ctx: Context) => {
     );
   } catch (error: any) {
     console.error('Помилка при видачі тесту:', error);
-    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => {});
+    await ctx.reply('Вибач, сталася помилка. Спробуй ще раз.').catch(() => { });
   }
 };
 
@@ -118,7 +118,7 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
 
   try {
     const user = await User.findOne({ telegramId });
@@ -152,7 +152,7 @@ export const sendLearnedWordsTest = async (ctx: Context) => {
     await sendTestMessage(ctx, result.test, 'learned');
   } catch (error: any) {
     console.error('Помилка при видачі тесту до слів:', error);
-    await ctx.reply('Вибач, сталася помилка. Спробуй пізніше.').catch(() => {});
+    await ctx.reply('Вибач, сталася помилка. Спробуй пізніше.').catch(() => { });
   }
 };
 
@@ -161,7 +161,7 @@ export const handleLearnedTestRepeat = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   try {
     const user = await User.findOne({ telegramId });
@@ -176,7 +176,7 @@ export const handleLearnedTestRepeat = async (ctx: Context) => {
     await sendTestMessage(ctx, testData, 'repeat');
   } catch (error: any) {
     console.error('Помилка при повторенні тестів:', error);
-    await ctx.reply('Вибач, сталася помилка.').catch(() => {});
+    await ctx.reply('Вибач, сталася помилка.').catch(() => { });
   }
 };
 
@@ -195,7 +195,7 @@ export const handleTestAnswer = async (ctx: Context) => {
 
   if (isCorrect) {
     const progress = await updateUserProgress(telegramId, 'test');
-    const totalXp = progress?.totalXp || 0;
+    const totalXp = progress?.totalGained || 0;
 
     const oldRank = Math.floor((totalXp - 5) / 1000) + 1;
     const newRank = Math.floor(totalXp / 1000) + 1;
@@ -206,7 +206,7 @@ export const handleTestAnswer = async (ctx: Context) => {
     }
   }
 
-  await ctx.answerCallbackQuery({ text: alertText, show_alert: showAlert }).catch(() => {});
+  await ctx.answerCallbackQuery({ text: alertText, show_alert: showAlert }).catch(() => { });
 
   if (!isCorrect) return;
 
@@ -224,7 +224,7 @@ export const handleTestAnswer = async (ctx: Context) => {
       return await ctx.reply(limitMsg, {
         parse_mode: 'HTML',
         reply_markup: new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu'),
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 
@@ -242,7 +242,7 @@ export const handleNextRepeatTest = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
 
-  await ctx.answerCallbackQuery().catch(() => {});
+  await ctx.answerCallbackQuery().catch(() => { });
 
   try {
     const user = await User.findOne({ telegramId });
@@ -284,7 +284,7 @@ export const handleExplainTest = async (ctx: Context) => {
     await ctx.editMessageText(
       `💡 <b>Підглядаєш? Ну-ну 😏</b>\n\n${test.explanation}`,
       { parse_mode: 'HTML', reply_markup: backKeyboard }
-    ).catch(() => {});
+    ).catch(() => { });
   } catch (err) {
     console.error('Помилка показу пояснення:', err);
   }
@@ -340,8 +340,8 @@ export const checkTestLimits = async (ctx: Context, next: NextFunction) => {
     const keyboard = new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu');
 
     if (ctx.callbackQuery) {
-      await ctx.answerCallbackQuery({ text: 'Денний ліміт тестів вичерпано 🛑', show_alert: true }).catch(() => {});
-      return await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
+      await ctx.answerCallbackQuery({ text: 'Денний ліміт тестів вичерпано 🛑', show_alert: true }).catch(() => { });
+      return await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => { });
     }
 
     return await ctx.reply(message, { parse_mode: 'HTML', reply_markup: keyboard });
