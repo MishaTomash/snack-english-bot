@@ -1,9 +1,8 @@
 import mongoose from 'mongoose';
 import { Word } from './models/Word';
 import { config } from './config/index';
-import { Text } from './models/Text';
 import { TestQuestion } from './models/TestQuestion';
-import { insertManyWord, insertManyText, insertManyTest } from './consts';
+import { insertManyWord, insertManyTest } from './consts';
 
 const seedData = async () => {
   try {
@@ -12,8 +11,6 @@ const seedData = async () => {
 
     // Додаємо кілька слів для рівня A1
     await Word.insertMany(insertManyWord);
-    await Text.insertMany(insertManyText);
-
     await TestQuestion.deleteMany({});
     await TestQuestion.insertMany([
       {
