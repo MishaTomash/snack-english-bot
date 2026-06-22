@@ -9,7 +9,7 @@ bot.catch((err) => {
   const ctx = err.ctx;
   console.error(`❌ Помилка під час обробки апдейту ${ctx.update.update_id}:`);
   const e = err.error;
-  
+
   if (e instanceof GrammyError) {
     if (e.error_code === 403) {
       console.warn(`⚠️ Бот не зміг надіслати повідомлення, бо користувач (ID: ${ctx.from?.id}) заблокував його.`);
