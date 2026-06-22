@@ -4,7 +4,6 @@ import { createAdminMenu } from '../keyboards/admin';
 import { createMainMenu } from '../keyboards/main';
 import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
-import { Text } from '../../models/Text';
 import { User } from '../../models/User';
 import { TopCycle } from '../../models/TopCycle';
 
@@ -83,30 +82,39 @@ export const handleExitAdmin = async (ctx: Context) => {
 
 export const handleAddWordPrompt = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
+
   await ctx.reply(
-    '📝 *Шаблон для додавання слова зі зв\'язаним тестом:*\n\n' +
-    '`word: A2 | Challenge | Виклик | Челендж | Як перекласти "Challenge"? | option1, option2, option3, option4 | правильна_відповідь`\n\n' +
-    '📌 Поля: *рівень | англ | укр | транскрипція | питання тесту | варіанти через кому | правильна відповідь*\n\n' +
-    '💡 Якщо питання тесту не потрібне — надішли лише 4 поля:\n' +
-    '`word: A2 | Challenge | Виклик | Челендж`',
-    { parse_mode: 'Markdown' },
+    `📝 <b>Шаблон для додавання слова зі зв'язаним тестом:</b>\n\n` +
+    `<code>word: A2 | Challenge | Виклик | Челендж | Як перекласти "Challenge"? | option1, option2, option3, option4 | правильна_відповідь | Пояснення до тесту (необов'язково)</code>\n\n` +
+    `📌 <b>Поля через роздільник ( | ):</b>\n` +
+    `1️⃣ Рівень (A1-C2)\n` +
+    `2️⃣ Англійське слово\n` +
+    `3️⃣ Український переклад\n` +
+    `4️⃣ Вимова/Транскрипція українськими літерами\n` +
+    `5️⃣ Запитання тесту (з ___ або без)\n` +
+    `6️⃣ 4 варіанти відповідей через кому\n` +
+    `7️⃣ Точний текст правильної відповіді\n` +
+    `8️⃣ Пояснення правила (опціонально)\n\n` +
+    `💡 <i>Якщо тест до слова не потрібен, надішли лише перші 4 поля:</i>\n` +
+    `<code>word: A2 | Challenge | Виклик | Челендж</code>\n\n` +
+    `📎 Можна надсилати багато слів одночасно — кожне слово з нового рядка!`,
+    { parse_mode: 'HTML' }
   );
 };
 
 export const handleAddTestPrompt = async (ctx: Context) => {
   if (!isAdmin(ctx)) return;
   await ctx.reply(
-    '🎯 *Шаблон для додавання міні-тесту (можна кидати одразу кілька рядків):*\n\n' +
-    '`test: A1 | Як буде "вода"? | school, water, window, bread | water | Water перекладається як вода.`',
-    { parse_mode: 'Markdown' }
-  );
-};
-
-export const handleAddTextPrompt = async (ctx: Context) => {
-  if (!isAdmin(ctx)) return;
-  await ctx.reply(
-    '📖 *Шаблон для додавання тексту:*\n\n`text: A2 | I love coding in TypeScript. | Я люблю програмувати на TypeScript.`',
-    { parse_mode: 'Markdown' },
+    `🎯 <b>Шаблон для додавання цікавих міні-тестів (з пропусками):</b>\n\n` +
+    `<code>test: B1 | I always start my morning with a cup of hot ___. | school, coffee, window, bread | coffee | Morning coffee — класичний ранішній ритуал.</code>\n\n` +
+    `📌 <b>Поля через роздільник ( | ):</b>\n` +
+    `1️⃣ Рівень (A1-C2)\n` +
+    `2️⃣ Цікаве речення з пропуском <code>___</code>\n` +
+    `3️⃣ 4 логічні варіанти відповідей через кому\n` +
+    `4️⃣ Точний текст правильної відповіді (слово, яке вставляється в пропуск)\n` +
+    `5️⃣ Корисне пояснення: чому саме це слово підходить + переклад (опціонально)\n\n` +
+    `📎 Надсилай тести пакетом (кожен тест з нового рядка). Префікс <code>test:</code> обов'язковий!`,
+    { parse_mode: 'HTML' }
   );
 };
 
@@ -128,74 +136,95 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
 
       let wordsAdded = 0;
       let testsAdded = 0;
+
+      // Списки для красивого фінального звіту
+      const successLogs: string[] = [];
       const errors: string[] = [];
+
+      // Чітко визначаємо допустимі рівні для приведення типів
+      const validLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
       for (const line of lines) {
         try {
           const parts = line.replace('word:', '').trim().split('|').map((s) => s.trim());
 
           if (parts.length < 4) {
-            errors.push(`⚠️ Мало полів у рядку: \`${line.substring(0, 20)}...\``);
-            continue; // Пропускаємо цей рядок, але йдемо далі
+            errors.push(`⚠️ Мало полів у рядку: <code>${line.substring(0, 30)}...</code>`);
+            continue;
           }
 
           const [inputLevel, english, ukrainian, transcription, question, rawOptions, correctAnswerText, explanation] = parts;
 
-          if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
-            errors.push(`⚠️ Невідомий рівень *${inputLevel}* у слові: ${english}`);
+          // Перевірка рівня
+          if (!validLevels.includes(inputLevel)) {
+            errors.push(`⚠️ Невідомий рівень <b>${inputLevel}</b> у слові: <code>${english}</code>`);
             continue;
           }
 
-          // Зберігаємо слово
+          // 🌟 Створюємо слово, явно привівши тип рівня за допомогою "as"
           const newWord = await Word.create({
-            level: inputLevel as Level,
+            level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
             english,
             ukrainian,
             transcription,
           });
           wordsAdded++;
 
-          // Якщо передані поля тесту — зберігаємо тест
+          let testLogStatus = '';
+          // Якщо передані обов'язкові поля для створення тесту
           if (question && rawOptions && correctAnswerText) {
             const options = rawOptions.split(',').map((s) => s.trim());
 
             if (options.length < 2) {
-              errors.push(`⚠️ Слово *${english}* додано, але тест пропущено (менше 2 варіантів).`);
+              errors.push(`⚠️ Слово <b>${english}</b> додано, але в тесті менше 2 варіантів.`);
             } else {
               const correctOptionIndex = options.indexOf(correctAnswerText);
+
               if (correctOptionIndex === -1) {
-                errors.push(`⚠️ Слово *${english}* додано, але правильна відповідь не знайдена в тесті.`);
+                errors.push(`⚠️ Слово <b>${english}</b> додано, але правильна відповідь (<code>${correctAnswerText}</code>) не знайдена серед варіантів.`);
               } else {
+                // 🌟 Створюємо тест, також привівши тип рівня
                 await TestQuestion.create({
                   level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
                   question,
                   options,
                   correctOptionIndex,
-                  wordId: newWord._id,  // 🔗 Прив'язка до слова
+                  wordId: newWord._id, // 🔗 Тепер TypeScript бачить _id без помилок!
                   explanation: explanation ? explanation : undefined
                 });
                 testsAdded++;
+                testLogStatus = ' (+🎯 тест)';
               }
             }
           }
+
+          successLogs.push(`🔹 [${inputLevel}] <b>${english}</b> — ${ukrainian}${testLogStatus}`);
+
         } catch (err) {
           console.error('Помилка додавання рядка:', err);
-          errors.push(`❌ Помилка сервера при обробці: \`${line.substring(0, 20)}...\``);
+          errors.push(`❌ Помилка сервера при обробці: <code>${line.substring(0, 20)}...</code>`);
         }
       }
 
-      // Формуємо фінальний звіт
-      let finalMessage = `✅ *Масове додавання завершено!*\n\n📚 Додано слів: *${wordsAdded}*\n🎯 Додано тестів: *${testsAdded}*`;
+      // Формуємо красивий фінальный звіт через безпечний HTML
+      let finalMessage = `🚀 <b>Масове завантаження завершено!</b>\n\n`;
+      finalMessage += `📊 <b>Підсумки:</b>\n`;
+      finalMessage += `🟢 Додано слів: <b>${wordsAdded}</b>\n`;
+      finalMessage += `🎯 Додано тестів: <b>${testsAdded}</b>\n\n`;
 
-      if (errors.length > 0) {
-        finalMessage += `\n\n⚠️ *Попередження:*\n${errors.join('\n')}`;
+      if (successLogs.length > 0) {
+        finalMessage += `✅ <b>Успішно завантажено:</b>\n${successLogs.join('\n')}\n\n`;
       }
 
-      return ctx.reply(finalMessage, { parse_mode: 'Markdown' });
+      if (errors.length > 0) {
+        finalMessage += `⚠️ <b>Помилки та попередження:</b>\n${errors.join('\n')}`;
+      }
+
+      return ctx.reply(finalMessage, { parse_mode: 'HTML' });
 
     } catch (error) {
       console.error('Помилка масового додавання:', error);
-      return ctx.reply('❌ Сталася критична помилка при масовому збереженні.');
+      return ctx.reply('❌ Сталася критична помилка в системі масового збереження матеріалів.', { parse_mode: 'HTML' });
     }
   }
 
@@ -208,13 +237,17 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
       if (lines.length === 0) return; // Якщо тестів немає, йдемо далі
 
       let addedCount = 0;
-      let errors: string[] = [];
+      const successLogs: string[] = [];
+      const errors: string[] = [];
+
+      // Допустимі рівні для типізації
+      const validLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
       for (const line of lines) {
         try {
           const parts = line.replace('test:', '').trim().split('|').map((s) => s.trim());
 
-          // Перевіряємо чи є хоча б 4 поля (пояснення - 5-те, воно не обов'язкове)
+          // Перевіряємо чи є хоча б 4 поля
           if (parts.length < 4) {
             errors.push(`❌ Мало полів у рядку: <code>${line.substring(0, 30)}...</code>`);
             continue;
@@ -222,24 +255,25 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
 
           const [inputLevel, question, rawOptions, correctAnswerText, explanation] = parts;
 
-          if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(inputLevel)) {
-            errors.push(`❌ Невідомий рівень (<b>${inputLevel}</b>) для: <code>${question}</code>`);
+          // Перевірка та приведення рівня
+          if (!validLevels.includes(inputLevel)) {
+            errors.push(`❌ Невідомий рівень (<b>${inputLevel}</b>) для: <code>${question.substring(0, 20)}...</code>`);
             continue;
           }
 
           const options = rawOptions.split(',').map((s) => s.trim());
           if (options.length < 2) {
-            errors.push(`❌ Мало варіантів (мінімум 2) для: <code>${question}</code>`);
+            errors.push(`❌ Мало варіантів (мінімум 2) для: <code>${question.substring(0, 20)}...</code>`);
             continue;
           }
 
           const correctOptionIndex = options.indexOf(correctAnswerText);
           if (correctOptionIndex === -1) {
-            errors.push(`❌ Відповідь '<b>${correctAnswerText}</b>' не знайдена серед варіантів: <code>${question}</code>`);
+            errors.push(`❌ Відповідь '<b>${correctAnswerText}</b>' не знайдена серед варіантів: <code>${question.substring(0, 20)}...</code>`);
             continue;
           }
 
-          // Створюємо тест, додаємо пояснення якщо воно є
+          // 🌟 Створюємо тест, явно привівши тип рівня за допомогою "as"
           await TestQuestion.create({
             level: inputLevel as 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2',
             question,
@@ -249,51 +283,34 @@ export const handleAdminTextInbound = async (ctx: Context, next: () => Promise<v
           });
 
           addedCount++;
+          successLogs.push(`🎯 [${inputLevel}] <code>${question.substring(0, 30)}${question.length > 30 ? '...' : ''}</code>`);
+
         } catch (err) {
           console.error('Помилка обробки рядка тесту:', err);
-          errors.push(`❌ Внутрішня помилка обробки: <code>${line.substring(0, 30)}...</code>`);
+          errors.push(`❌ Внутрішня помилка обробки рядка: <code>${line.substring(0, 20)}...</code>`);
         }
       }
 
-      // 🔥 ЗМІНЕНО: Використовуємо HTML, щоб `___` у текстах не ламали бота!
-      let replyText = `✅ <b>Успішно додано тестів: ${addedCount}</b>\n`;
+      // Формуємо красивий фінальний звіт у HTML
+      let replyText = `🚀 <b>Масове додавання тестів завершено!</b>\n\n`;
+      replyText += `📊 <b>Підсумки:</b>\n`;
+      replyText += `🟢 Додано самостійних тестів: <b>${addedCount}</b>\n\n`;
+
+      if (successLogs.length > 0) {
+        replyText += `✅ <b>Успішно додані тести:</b>\n${successLogs.join('\n')}\n\n`;
+      }
+
       if (errors.length > 0) {
-        // Екрануємо спецсимволи < і >, щоб не зламати HTML
-        const safeErrors = errors.map(e => e.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-        replyText += `\n⚠️ <b>Помилки:</b>\n${safeErrors.join('\n')}`;
+        replyText += `⚠️ <b>Помилки:</b>\n${errors.join('\n')}`;
       }
 
       return ctx.reply(replyText, { parse_mode: 'HTML' });
+
     } catch (error) {
       console.error('Критична помилка додавання тестів:', error);
-      return ctx.reply('❌ <b>Помилка при збереженні тестів на сервері.</b>', { parse_mode: 'HTML' });
+      return ctx.reply('❌ <b>Критична помилка при збереженні тестів на сервері.</b>', { parse_mode: 'HTML' });
     }
   }
-  // ── 3. ТЕКСТ ──────────────────────────────────────────────────────────────
-  if (textData.startsWith('text:')) {
-    try {
-      const parts = textData.replace('text:', '').trim().split('|').map((s) => s.trim());
-      if (parts.length < 3) {
-        return ctx.reply(
-          '❌ Потрібно 3 поля: `text: рівень | англійський текст | переклад`',
-          { parse_mode: 'Markdown' },
-        );
-      }
-      const [inputLevel, english, ukrainian] = parts;
-      if (!ALLOWED_LEVELS.includes(inputLevel as Level)) {
-        return ctx.reply(`❌ Невідомий рівень: *${inputLevel}*`, { parse_mode: 'Markdown' });
-      }
-      await Text.create({ level: inputLevel as Level, englishText: english, ukrainianTranslation: ukrainian });
-      return ctx.reply(
-        `✅ *Текст успішно додано!*\n\n📊 Рівень: *${inputLevel}*\n🇬🇧 _${english}_\n🇺🇦 _${ukrainian}_`,
-        { parse_mode: 'Markdown' },
-      );
-    } catch (error) {
-      console.error('Помилка додавання тексту:', error);
-      return ctx.reply('❌ Помилка при збереженні тексту.');
-    }
-  }
-
   return next();
 };
 
@@ -310,13 +327,12 @@ export const handleAdminStats = async (ctx: Context) => {
 
     const levelStats = await Promise.all(
       ALLOWED_LEVELS.map(async (lvl) => {
-        const [words, tests, texts, linkedTests] = await Promise.all([
+        const [words, tests, linkedTests] = await Promise.all([
           Word.countDocuments({ level: lvl }),
           TestQuestion.countDocuments({ level: lvl }),
-          Text.countDocuments({ level: lvl }),
           TestQuestion.countDocuments({ level: lvl, wordId: { $ne: null } }),
         ]);
-        return { lvl, words, tests, texts, linkedTests };
+        return { lvl, words, tests, linkedTests };
       }),
     );
 
@@ -325,11 +341,10 @@ export const handleAdminStats = async (ctx: Context) => {
     message += `💎 З них з Premium: *${premiumUsers}*\n\n`;
     message += `🗂 *Наповнення контентом за рівнями:*\n`;
 
-    for (const { lvl, words, tests, texts, linkedTests } of levelStats) {
+    for (const { lvl, words, tests, linkedTests } of levelStats) {
       message += `\n📈 *Рівень ${lvl}:*\n`;
       message += `  ▫️ Слова/Фрази: *${words}*\n`;
       message += `  ▫️ Міні-тести (всього): *${tests}* _(прив'язані до слів: ${linkedTests})_\n`;
-      message += `  ▫️ Тексти: *${texts}*\n`;
     }
 
     await ctx.reply(message, { parse_mode: 'Markdown' });
@@ -427,7 +442,7 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
     return ctx.reply('❌ Неправильний формат. Використовуйте ДД.ММ.РРРР (наприклад, 31.05.2026). Або /cancel');
   }
   // Хелпер — надсилає одне повідомлення з retry при 429
-const sendWithRetry = async (fn: () => Promise<unknown>): Promise<'ok' | 'fail'> => {
+  const sendWithRetry = async (fn: () => Promise<unknown>): Promise<'ok' | 'fail'> => {
     let attempts = 0;
     while (attempts < 3) {
       try {

@@ -4,7 +4,6 @@ import { checkWordLimits } from '../middlewares/limits';
 
 import { handleStart } from '../handlers/start';
 import { handleWords } from '../handlers/words';
-import { sendRandomText } from '../handlers/texts';
 import { sendRandomTest } from '../handlers/tests';
 import { showProfile } from '../handlers/profile';
 import { handleAdminCommand } from '../handlers/admin';
@@ -15,7 +14,6 @@ import { handleTopMenu } from '../handlers/rating'; // ← додай імпор
 export const registerCommands = (bot: Bot) => {
     bot.command('start', handleStart);
     bot.command('words', checkWordLimits, handleWords);
-    bot.command('text', sendRandomText);
     bot.command('test', sendRandomTest);
     bot.command('profile', showProfile);
     bot.command('stats', showProfile);
