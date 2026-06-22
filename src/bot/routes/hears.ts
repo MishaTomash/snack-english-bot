@@ -2,7 +2,7 @@ import { Bot } from 'grammy';
 import { checkWordLimits } from '../middlewares/limits';
 
 import {
-  handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt, handleAddTextPrompt,
+  handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,
   handleAdminStats, handleAdminUsers, handleBroadcastStart
 } from '../handlers/admin';
 import { handleAdminTopicsMenu } from '../handlers/adminTopics';
@@ -25,7 +25,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🚪 Вийти з адмінки', handleExitAdmin);
   bot.hears('➕ Додати слово', handleAddWordPrompt);
   bot.hears('➕ Додати тест', handleAddTestPrompt);
-  bot.hears('➕ Додати текст', handleAddTextPrompt);
+  // bot.hears('➕ Додати текст', handleAddTextPrompt);
   bot.hears('📊 Статистика бази', handleAdminStats);
   bot.hears('👥 Користувачі', handleAdminUsers);
   bot.hears('📢 Розсилка', handleBroadcastStart);
