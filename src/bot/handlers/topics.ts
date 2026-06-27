@@ -87,7 +87,8 @@ export const handleTopicReset = async (ctx: Context) => {
     await user.save();
     await ctx.answerCallbackQuery({ text: '🔄 Тему скинуто! Починаємо заново.' }).catch(() => { });
 
-    // Запускаємо вивчення цієї теми з першого слова
+    // Видаляємо старе повідомлення і відправляємо нове — замість edit
+    await ctx.deleteMessage().catch(() => { });
     await sendNextTopicWord(ctx, topicId);
 };
 
