@@ -408,7 +408,31 @@ export const handleBroadcastStart = async (ctx: Context) => {
     { parse_mode: 'HTML' },
   );
 };
+export const handleAddSentencePrompt = async (ctx: Context) => {
+  if (ctx.from?.id !== config.ADMIN_ID) return;
 
+  await ctx.reply(
+    `✍️ <b>Шаблон для додавання речень:</b>
+
+<code>sentence: I am working | Я зараз працюю | Present Continuous — дія що відбувається зараз | A2</code>
+
+📌 <b>Поля через ( | ):</b>
+1️⃣ Речення англійською (обов'язково)
+2️⃣ Переклад українською (обов'язково)
+3️⃣ Пояснення граматики (опційно)
+4️⃣ Рівень A1-C2 (опційно)
+
+📎 Можна надсилати багато речень — кожне з нового рядка!
+
+<b>Приклад пакету:</b>
+
+<code>sentence: She is reading | Вона читає | Present Continuous | A2
+sentence: I have eaten | Я вже поїв | Present Perfect | B1
+sentence: They will come | Вони прийдуть | Future Simple | A2</code>`
+    ,
+    { parse_mode: "HTML" }
+  );
+};
 // ЗНАЙДИ функцию handleAdminMessages і додай цей блок ПЕРЕД блоком розсилки (перед `if (adminState.get(adminId) !== 'waiting_for_broadcast') return next();`):
 
 export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
@@ -488,7 +512,6 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
       return ctx.reply('❌ Критична помилка під час розсилки.');
     }
   }
-
   // Якщо стан якийсь інший (хоча такого не має бути) — пускаємо далі
   return next();
 };

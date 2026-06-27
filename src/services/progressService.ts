@@ -18,7 +18,7 @@ export const getRankInfo = (xp: number) => {
 // ─── Основна логіка нарахування прогресу (БЕЗ ЛІМІТІВ) ───────────────────────
 export const updateUserProgress = async (
     telegramId: number,
-    activityType: 'word' | 'test' | 'text'
+    activityType: 'word' | 'test' | 'text' | 'sentence'
 ) => {
     const user = await User.findOne({ telegramId });
     if (!user) return { gainedXp: 0, streakBonusXp: 0, totalGained: 0, limitReached: false };
@@ -68,9 +68,8 @@ export const updateUserProgress = async (
         updateOps.$inc.testXpEarnedToday = 5;
         updateOps.$set.lastTestXpDate = now;
         updateOps.$set.lastTestDate = now;
-    }
-    else if (activityType === 'text') {
-        gainedXp = 30;
+    } else if (activityType === 'sentence') {
+        gainedXp = 5;
     }
 
     const totalGainedThisTurn = gainedXp + streakBonusXp;

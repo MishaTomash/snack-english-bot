@@ -30,7 +30,7 @@ export const sendTestMessage = async (
   const questionText = testData.question.replace(/___/g, '…');
 
   const title = source === 'general'
-    ? '😏 <b>Не підглядай!</b>'
+    ? '😏 <b>Ну що, думай!</b>'
     : '🤔 <b>Ну що, памʼятаєш?</b>';
 
   const message = `${title}\n\n${questionText}`;

@@ -5,7 +5,7 @@ import { getAudioUrl } from '../../services/audioService';
 import { updateUserProgress } from '../../services/progressService';
 import { checkAndRewardReferrer } from './referrals';
 import { Word } from "../../models/Word"
-import  mongoose  from 'mongoose';
+import mongoose from 'mongoose';
 
 // ─── Константи ────────────────────────────────────────────────────────────────
 
@@ -97,8 +97,17 @@ export const handleWords = async (ctx: Context) => {
 
     const word = words[0];
 
-const message = `📚 <b>Давай, давай, вчися! Твій рівень поки що лише ${user.level}.</b> \n\n🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
-    // 🌟 ЗМІНЕНО: Тепер кнопка передає ID нового слова!
+    const message = `
+📚 <b>Час прокачати англійську</b>
+💪 Слово рівня: ${user.level}
+━━━━━━━━━━━━━━
+🇬🇧 <b>${word.english}</b>
+🔤 [${word.transcription}]
+━━━━━━━━━━━━━━
+👇 Переклад:
+🇺🇦 <b>${word.ukrainian}</b>
+
+`;    // 🌟 ЗМІНЕНО: Тепер кнопка передає ID нового слова!
     const keyboard = new InlineKeyboard()
       .text('🔊 Слухати вимову', `audio_${word.english}`)
       .text('💾 Зберегти', `save_word_${word._id}`)

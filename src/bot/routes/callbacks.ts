@@ -39,6 +39,13 @@ import { handleReferralMenu } from '../handlers/referrals';
 
 import { registerSeasonAdminHandlers } from '../handlers/seasonAdmin';
 
+import {
+handleSentenceExercise,
+handleSentenceWordTap,
+handleSentenceReset,
+handleSentenceRetry,
+} from '../handlers/sentences';
+
 export const registerCallbacks = (bot: Bot) => {
   // Загальні
   bot.callbackQuery(/^level_/, handleLevelSelection);
@@ -88,7 +95,7 @@ export const registerCallbacks = (bot: Bot) => {
   bot.callbackQuery(/^topic_reset_/, handleTopicReset);
   bot.callbackQuery(/^topic_(know|dontknow)_/, handleTopicWordAction);
   bot.callbackQuery('topics_back', async (ctx) => {
-    await ctx.deleteMessage().catch(() => {});
+    await ctx.deleteMessage().catch(() => { });
     await handleTopicsMenu(ctx);
   });
   bot.callbackQuery(/^adm_topic_([a-f0-9]{24})$/, handleAdminTopicSelect);
@@ -111,4 +118,13 @@ export const registerCallbacks = (bot: Bot) => {
   bot.callbackQuery('menu_words_topics', handleTopicsMenu);
   bot.callbackQuery('menu_courses', handleCoursesList);
   bot.callbackQuery('menu_saved_words', handleSavedWords);
+
+  // Sentences
+  bot.callbackQuery('menu_sentences', handleSentenceExercise);
+  bot.callbackQuery('sentence_next', handleSentenceExercise);
+  bot.callbackQuery('sentence_skip', handleSentenceExercise);
+  bot.callbackQuery('sentence_reset', handleSentenceReset);
+  bot.callbackQuery('sentence_retry', handleSentenceRetry);
+  bot.callbackQuery(/^sentence_word_\d+$/, handleSentenceWordTap);
+  bot.callbackQuery('sentence_noop', async (ctx) => ctx.answerCallbackQuery());
 };
