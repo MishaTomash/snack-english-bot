@@ -66,3 +66,42 @@ export const checkWordLimits = async (ctx: Context, next: NextFunction) => {
     // Якщо ліміт не вичерпано — передаємо управління далі (до handleWords)
     await next();
 }
+
+export const checkSentenceLimits = async (ctx: Context, next: NextFunction) => {
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return await next();
+
+  const user = await User.findOne({ telegramId });
+  if (!user) return await next();
+
+  if (user.isPremium) return await next();
+
+  const FREE_SENTENCES_LIMIT = 5;
+  const now = new Date();
+  const lastSentence = user.lastSentenceDate || new Date(0);
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastSentenceDay = new Date(lastSentence.getFullYear(), lastSentence.getMonth(), lastSentence.getDate());
+
+  if (today.getTime() > lastSentenceDay.getTime()) {
+    user.sentencesTodayCount = 0;
+    await user.save();
+  }
+
+  if (user.sentencesTodayCount >= FREE_SENTENCES_LIMIT) {
+    const message =
+      `🛑 Ти вичерпав свій денний ліміт складання речень (<b>${FREE_SENTENCES_LIMIT} речень</b>).\n\n` +
+      `💎 Оформи Premium, щоб практикуватись без обмежень!`;
+
+    const keyboard = new InlineKeyboard().text('💎 Отримати Premium', 'open_premium_menu');
+
+    if (ctx.callbackQuery) {
+      await ctx.answerCallbackQuery({ text: 'Денний ліміт речень вичерпано 🛑', show_alert: true }).catch(() => {});
+      return await ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
+    }
+
+    return await ctx.reply(message, { parse_mode: 'HTML', reply_markup: keyboard });
+  }
+
+  await next();
+};

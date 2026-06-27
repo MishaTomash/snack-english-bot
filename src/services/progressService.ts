@@ -70,6 +70,8 @@ export const updateUserProgress = async (
         updateOps.$set.lastTestDate = now;
     } else if (activityType === 'sentence') {
         gainedXp = 5;
+        updateOps.$inc.sentencesTodayCount = 1;
+        updateOps.$set.lastSentenceDate = now;
     }
 
     const totalGainedThisTurn = gainedXp + streakBonusXp;

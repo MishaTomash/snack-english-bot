@@ -38,6 +38,8 @@ export interface IUser extends Document {
     seenTopicWords: Schema.Types.ObjectId[];
     testsTakenToday: number;
     lastTestDate?: Date;
+    sentencesTodayCount: number;
+    lastSentenceDate?: Date;
 }
 
 const UserSchema: Schema = new Schema({
@@ -77,6 +79,8 @@ const UserSchema: Schema = new Schema({
     seenTopicWords: { type: [Schema.Types.ObjectId], default: [] },
     testsTakenToday: { type: Number, default: 0 },
     lastTestDate: { type: Date },
+    sentencesTodayCount: { type: Number, default: 0 },
+    lastSentenceDate: { type: Date },
 });
 
 // ✅ ОПТИМІЗАЦІЯ: Складені індекси для швидких запитів

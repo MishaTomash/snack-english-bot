@@ -1,5 +1,5 @@
 import { Bot } from 'grammy';
-import { checkWordLimits } from '../middlewares/limits';
+import { checkWordLimits, checkSentenceLimits } from '../middlewares/limits';
 
 import { handleLevelSelection } from '../handlers/level';
 import { handleChangeLevelClick } from '../handlers/settings';
@@ -40,10 +40,10 @@ import { handleReferralMenu } from '../handlers/referrals';
 import { registerSeasonAdminHandlers } from '../handlers/seasonAdmin';
 
 import {
-handleSentenceExercise,
-handleSentenceWordTap,
-handleSentenceReset,
-handleSentenceRetry,
+  handleSentenceExercise,
+  handleSentenceWordTap,
+  handleSentenceReset,
+  handleSentenceRetry,
 } from '../handlers/sentences';
 
 export const registerCallbacks = (bot: Bot) => {
@@ -120,7 +120,8 @@ export const registerCallbacks = (bot: Bot) => {
   bot.callbackQuery('menu_saved_words', handleSavedWords);
 
   // Sentences
-  bot.callbackQuery('menu_sentences', handleSentenceExercise);
+  bot.callbackQuery('menu_sentences', checkSentenceLimits, handleSentenceExercise);
+  bot.callbackQuery('sentence_next', checkSentenceLimits, handleSentenceExercise);
   bot.callbackQuery('sentence_next', handleSentenceExercise);
   bot.callbackQuery('sentence_skip', handleSentenceExercise);
   bot.callbackQuery('sentence_reset', handleSentenceReset);
