@@ -26,4 +26,4 @@ registerPayments(bot);
 registerErrorHandler(bot);
 
 setupSeasonScheduler(bot).catch(console.error);
-setupBotCommands(bot).catch(console.error); // ← додай цей рядок
+setupBotCommands(bot).catch(console.error); // 
