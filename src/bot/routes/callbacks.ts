@@ -4,7 +4,7 @@ import { checkWordLimits } from '../middlewares/limits';
 import { handleLevelSelection } from '../handlers/level';
 import { handleChangeLevelClick } from '../handlers/settings';
 import { handleWordAudio, handleSetReminder, handleReminderTomorrow, handleWords } from '../handlers/words';
-import { handleSaveWord, handleDeleteSavedWord, handleNextSavedWord } from '../handlers/saved';
+import { handleSaveWord, handleDeleteSavedWord, handleNextSavedWord, handleSavedWords } from '../handlers/saved';
 import { handleStarsInvoice } from '../handlers/support';
 import { showProfile } from '../handlers/profile';
 import { handleTopMenu } from '../handlers/rating';
@@ -104,4 +104,11 @@ export const registerCallbacks = (bot: Bot) => {
   bot.callbackQuery(/paid_prem_/, handlePaidButton);
   bot.callbackQuery(/approve_prem_/, handlePremiumApproval);
   bot.callbackQuery(/reject_prem_/, handlePremiumRejection);
+
+  bot.callbackQuery('menu_learn_words', checkWordLimits, handleWords);
+  bot.callbackQuery('menu_check_words', sendLearnedWordsTest);
+  bot.callbackQuery('menu_mini_tests', checkTestLimits, sendRandomTest);
+  bot.callbackQuery('menu_words_topics', handleTopicsMenu);
+  bot.callbackQuery('menu_courses', handleCoursesList);
+  bot.callbackQuery('menu_saved_words', handleSavedWords);
 };
