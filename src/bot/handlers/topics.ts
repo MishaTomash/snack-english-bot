@@ -16,6 +16,7 @@ export const handleTopicsMenu = async (ctx: Context) => {
         keyboard.text(`${t.emoji} ${t.title}`, `topic_open_${t._id}`).row();
     });
 
+    await ctx.deleteMessage().catch(() => {});
     await ctx.reply('📚 Обери тему для вивчення:', { reply_markup: keyboard });
 };
 
@@ -75,55 +76,47 @@ export const handleTopicReset = async (ctx: Context) => {
     const user = await User.findOne({ telegramId });
     if (!user) return;
 
-    // Знаходимо всі слова, які належать саме цій темі
     const topicWords = await Word.find({ topicId }).select('_id').lean();
     const topicWordIds = topicWords.map(w => w._id.toString());
 
-    // Видаляємо слова цієї теми з історії переглядів юзера, інші теми не чіпаємо
     user.seenTopicWords = user.seenTopicWords.filter(
         (id) => !topicWordIds.includes(id.toString())
     );
 
     await user.save();
-    await ctx.answerCallbackQuery({ text: '🔄 Тему скинуто! Починаємо заново.' }).catch(() => { });
+    await ctx.answerCallbackQuery({ text: '🔄 Тему скинуто! Починаємо заново.' }).catch(() => {});
+    await ctx.deleteMessage().catch(() => {});
 
-    // Видаляємо старе повідомлення і відправляємо нове — замість edit
-    await ctx.deleteMessage().catch(() => { });
-    await sendNextTopicWord(ctx, topicId);
+    await sendNextTopicWord(ctx, topicId, true); // ← true = forceReply
 };
 
-// --- Допоміжна функція для видачі слова ---
-const sendNextTopicWord = async (ctx: Context, topicId: string) => {
+const sendNextTopicWord = async (ctx: Context, topicId: string, forceReply = false) => {
     const telegramId = ctx.from?.id;
     const user = await User.findOne({ telegramId });
     if (!user) return;
 
-    // Перевірка ліміту для безкоштовних користувачів
     if (!user.isPremium && user.freeTopicWordsLearned >= 10) {
         const limitKeyboard = new InlineKeyboard().text('💎 Купити Premium', 'open_premium_menu');
         const limitText = '🔒 Ви вивчили 10 безкоштовних слів з тем.\n\nОформіть Premium, щоб вчити всі слова (1000+).';
-        if (ctx.callbackQuery) return ctx.editMessageText(limitText, { reply_markup: limitKeyboard });
+        if (ctx.callbackQuery && !forceReply) return ctx.editMessageText(limitText, { reply_markup: limitKeyboard });
         return ctx.reply(limitText, { reply_markup: limitKeyboard });
     }
 
-    // Шукаємо слово з цієї теми, яке юзер ЩЕ НЕ бачив у цьому циклі
     const word = await Word.findOne({
         topicId,
         _id: { $nin: user.seenTopicWords as any[] }
     });
 
-    // 👇 ТУТ ОНОВЛЕНО: Якщо слова закінчилися, додаємо кнопку "Вчити заново"
     if (!word) {
-        const endText = '🎉 Ти вивчил всі слова з цієї теми!';
+        const endText = '🎉 Ти вивчив всі слова з цієї теми!';
         const endKeyboard = new InlineKeyboard()
             .text('🔄 Вчити заново', `topic_reset_${topicId}`).row()
             .text('🔙 До списку тем', 'topics_back');
 
-        if (ctx.callbackQuery) return ctx.editMessageText(endText, { reply_markup: endKeyboard });
+        if (ctx.callbackQuery && !forceReply) return ctx.editMessageText(endText, { reply_markup: endKeyboard });
         return ctx.reply(endText, { reply_markup: endKeyboard });
     }
 
-    // Картка слова (як ти просив: дизайн як у "Вчити слова" + кнопка повернення)
     const keyboard = new InlineKeyboard()
         .text('🔊 Вимова', `audio_${word._id}`)
         .text('💾 Зберегти', `save_word_${word._id}`).row()
@@ -132,8 +125,8 @@ const sendNextTopicWord = async (ctx: Context, topicId: string) => {
 
     const text = `🇬🇧 <b>${word.english}</b>\n🔤 [${word.transcription}]\n\n👇 Українською:\n🇺🇦 ${word.ukrainian}`;
 
-    if (ctx.callbackQuery) {
-        await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => { });
+    if (ctx.callbackQuery && !forceReply) {
+        await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
     } else {
         await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     }
