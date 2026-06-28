@@ -574,8 +574,9 @@ const buildPremiumUsersPage = (
   // Кнопки кожного юзера (детальна інфо)
   for (let i = start; i < end; i++) {
     const u = users[i];
-    const name = u.firstName ? u.firstName.substring(0, 12) : 'Анонім';
-    keyboard.text(`👤 ${name}`, `adm_prem_user_${u.telegramId}`).row();
+    const rawName = u.firstName ?? 'Анонім';
+    const safeName = rawName.replace(/[^\p{L}\p{N}\s@_\-().!?]/gu, '').trim().substring(0, 12) || 'Анонім';
+    keyboard.text(`👤 ${safeName}`, `adm_prem_user_${u.telegramId}`).row();
   }
 
   // Пагінація
