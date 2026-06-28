@@ -512,6 +512,243 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
       return ctx.reply('❌ Критична помилка під час розсилки.');
     }
   }
+
+  if (state?.startsWith('msg_to_')) {
+
+    const targetId = parseInt(state.replace('msg_to_', ''), 10);
+
+    adminState.delete(adminId);
+
+    try {
+
+      await ctx.copyMessage(targetId);
+
+      return ctx.reply(
+        `✅ Повідомлення надіслано юзеру <code>${targetId}</code>`,
+        { parse_mode: 'HTML' }
+      );
+    } catch {
+
+      return ctx.reply(
+        `❌ Не вдалося надіслати. Юзер міг заблокувати бота.`
+      );
+    }
+
+  }
+
   // Якщо стан якийсь інший (хоча такого не має бути) — пускаємо далі
   return next();
+};
+
+
+// ─── Додай цей код в кінець handlers/admin.ts ────────────────────────────────
+
+const PREMIUM_PAGE_SIZE = 8;
+
+const buildPremiumUsersPage = (
+  users: any[],
+  page: number,
+): { text: string; keyboard: InlineKeyboard } => {
+  const total = users.length;
+  const totalPages = Math.ceil(total / PREMIUM_PAGE_SIZE);
+  const start = page * PREMIUM_PAGE_SIZE;
+  const end = Math.min(start + PREMIUM_PAGE_SIZE, total);
+
+  let text = `💎 <b>Premium користувачі</b>\n`;
+  text += `Всього: <b>${total}</b> | Сторінка ${page + 1}/${totalPages}\n\n`;
+
+  for (let i = start; i < end; i++) {
+    const u = users[i];
+    const name = u.firstName ? escapeHtml(u.firstName) : 'Анонім';
+    const username = u.username ? ` (@${escapeHtml(u.username)})` : '';
+    const expires = u.premiumExpiresAt
+      ? new Date(u.premiumExpiresAt).toLocaleDateString('uk-UA')
+      : 'Безстроково';
+
+    text += `${i + 1}. <b>${name}</b>${username}\n`;
+    text += `   📱 <code>${u.telegramId}</code> | 📅 до ${expires}\n\n`;
+  }
+
+  const keyboard = new InlineKeyboard();
+
+  // Кнопки кожного юзера (детальна інфо)
+  for (let i = start; i < end; i++) {
+    const u = users[i];
+    const name = u.firstName ? u.firstName.substring(0, 12) : 'Анонім';
+    keyboard.text(`👤 ${name}`, `adm_prem_user_${u.telegramId}`).row();
+  }
+
+  // Пагінація
+  const navRow: { label: string; data: string }[] = [];
+  if (page > 0) navRow.push({ label: '⬅️', data: `adm_prem_page_${page - 1}` });
+  if (page < totalPages - 1) navRow.push({ label: '➡️', data: `adm_prem_page_${page + 1}` });
+  if (navRow.length > 0) {
+    navRow.forEach(b => keyboard.text(b.label, b.data));
+    keyboard.row();
+  }
+
+  return { text, keyboard };
+};
+
+// ─── Список premium юзерів ────────────────────────────────────────────────────
+
+export const handleAdminPremiumUsers = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => { });
+
+  try {
+    const users = await User.find({ isPremium: true })
+      .select('firstName username telegramId premiumExpiresAt xp streak wordsLearned testsPassed level seasonXp')
+      .sort({ premiumExpiresAt: 1 })
+      .lean();
+
+    if (users.length === 0) {
+      return ctx.reply('😔 Немає жодного Premium користувача.');
+    }
+
+    const { text, keyboard } = buildPremiumUsersPage(users, 0);
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+  } catch (error) {
+    console.error('Помилка при отриманні premium юзерів:', error);
+    await ctx.reply('❌ Помилка при завантаженні.');
+  }
+};
+
+// ─── Пагінація premium юзерів ─────────────────────────────────────────────────
+
+export const handleAdminPremiumPagination = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery().catch(() => { });
+
+  const page = parseInt(ctx.callbackQuery?.data?.split('_')[3] ?? '', 10);
+  if (isNaN(page)) return;
+
+  try {
+    const users = await User.find({ isPremium: true })
+      .select('firstName username telegramId premiumExpiresAt xp streak wordsLearned testsPassed level seasonXp')
+      .sort({ premiumExpiresAt: 1 })
+      .lean();
+
+    const { text, keyboard } = buildPremiumUsersPage(users, page);
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard })
+      .catch((err: any) => {
+        if (!err?.description?.includes('message is not modified')) throw err;
+      });
+  } catch (error) {
+    console.error('Помилка пагінації premium:', error);
+  }
+};
+
+// ─── Детальна картка premium юзера ───────────────────────────────────────────
+
+export const handleAdminPremiumUserDetail = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery().catch(() => { });
+
+  const targetId = parseInt(ctx.callbackQuery?.data?.split('_')[3] ?? '', 10);
+  if (isNaN(targetId)) return;
+
+  try {
+    const u = await User.findOne({ telegramId: targetId }).lean();
+    if (!u) return ctx.answerCallbackQuery('Юзер не знайдений').catch(() => { });
+
+    const name = u.firstName ? escapeHtml(u.firstName) : 'Анонім';
+    const username = u.username ? `@${escapeHtml(u.username)}` : 'немає';
+    const expires = u.premiumExpiresAt
+      ? new Date(u.premiumExpiresAt).toLocaleDateString('uk-UA')
+      : 'Безстроково';
+    const lastActive = u.lastActive
+      ? new Date(u.lastActive).toLocaleDateString('uk-UA')
+      : 'Не відомо';
+    const registered = (u as any).createdAt
+      ? new Date((u as any).createdAt).toLocaleDateString('uk-UA')
+      : 'Не відомо';
+
+    const text =
+      `💎 <b>Premium юзер: ${name}</b>\n\n` +
+      `👤 <b>Особисте:</b>\n` +
+      `├ ID: <code>${u.telegramId}</code>\n` +
+      `├ Username: ${username}\n` +
+      `├ Рівень: ${u.level ?? 'Не обрано'}\n` +
+      `└ Реферер: ${u.referredBy ?? 'Немає'}\n\n` +
+      `💎 <b>Premium:</b>\n` +
+      `├ Статус: ${u.isPremium ? '✅ Активний' : '❌ Неактивний'}\n` +
+      `└ Діє до: ${expires}\n\n` +
+      `📊 <b>Статистика:</b>\n` +
+      `├ XP: ${u.xp}\n` +
+      `├ Season XP: ${u.seasonXp}\n` +
+      `├ Серія: ${u.streak ?? 0} днів 🔥\n` +
+      `├ Слів вивчено: ${u.wordsLearned ?? 0}\n` +
+      `└ Тестів пройдено: ${u.testsPassed ?? 0}\n\n` +
+      `🕐 <b>Активність:</b>\n` +
+      `├ Остання активність: ${lastActive}\n` +
+      `├ Заблокований: ${u.isBlocked ? '❌ Так' : '✅ Ні'}\n` +
+      `└ Рефералів: ${u.referralCount ?? 0}\n`;
+
+    const keyboard = new InlineKeyboard()
+      .text('✉️ Написати', `adm_prem_msg_${u.telegramId}`)
+      .text('❌ Забрати Premium', `adm_prem_revoke_${u.telegramId}`).row()
+      .text('🔙 Назад', 'adm_prem_back');
+
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard })
+      .catch(() => ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard }));
+  } catch (error) {
+    console.error('Помилка деталей юзера:', error);
+  }
+};
+
+// ─── Написати юзеру (з адмінки) ──────────────────────────────────────────────
+
+export const handleAdminPremiumMessage = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery().catch(() => { });
+
+  const targetId = parseInt(ctx.callbackQuery?.data?.split('_')[3] ?? '', 10);
+  if (isNaN(targetId)) return;
+
+  adminState.set(ctx.from!.id, `msg_to_${targetId}`);
+
+  await ctx.reply(
+    `✉️ Введи повідомлення для юзера <code>${targetId}</code>.\n\n<i>/cancel — скасувати</i>`,
+    { parse_mode: 'HTML' }
+  );
+};
+
+// ─── Забрати Premium ──────────────────────────────────────────────────────────
+
+export const handleAdminRevokePremium = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery().catch(() => { });
+
+  const targetId = parseInt(ctx.callbackQuery?.data?.split('_')[3] ?? '', 10);
+  if (isNaN(targetId)) return;
+
+  try {
+    await User.findOneAndUpdate(
+      { telegramId: targetId },
+      { $set: { isPremium: false, premiumExpiresAt: null } }
+    );
+
+    // Повідомляємо юзера
+    await ctx.api.sendMessage(
+      targetId,
+      '😔 Ваш Premium статус було скасовано адміністратором.'
+    ).catch(() => { });
+
+    await ctx.editMessageText(
+      `✅ Premium забрано у юзера <code>${targetId}</code>`,
+      { parse_mode: 'HTML' }
+    ).catch(() => { });
+  } catch (error) {
+    console.error('Помилка revoke premium:', error);
+  }
+};
+
+// ─── Повернутись до списку premium ────────────────────────────────────────────
+
+export const handleAdminPremiumBack = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  await ctx.answerCallbackQuery().catch(() => { });
+  await ctx.deleteMessage().catch(() => { });
+  await handleAdminPremiumUsers(ctx);
 };

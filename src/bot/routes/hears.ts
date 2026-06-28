@@ -20,7 +20,7 @@ import { handleTopicsMenu } from '../handlers/topics';
 import { sendPremiumMenu } from '../handlers/premium';
 import { handleClearBlockedUsers } from '../handlers/adminCleanUser';
 import { createLearningMenu } from '../keyboards/main';
-import { handleAddSentencePrompt } from '../handlers/admin'; 
+import { handleAddSentencePrompt, handleAdminPremiumUsers  } from '../handlers/admin'; 
 
 export const registerHears = (bot: Bot) => {
   // Адмін
@@ -37,6 +37,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🏆 Сезон рейтингу', handleSeasonAdminMenu);
   bot.hears('🧹заблокованих', handleClearBlockedUsers);
   bot.hears('✍️ Додати речення', handleAddSentencePrompt);
+  bot.hears('💎 Premium юзери', handleAdminPremiumUsers);
 
 // === НОВЕ ГОЛОВНЕ МЕНЮ ===
   bot.hears('📚 Навчання', async (ctx) => {

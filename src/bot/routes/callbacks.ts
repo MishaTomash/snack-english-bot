@@ -24,7 +24,17 @@ import {
   handleAdminCoursesMenu, handleAdminCourseSelect, handleAdminCourseActionPrompt
 } from '../handlers/adminCourses';
 
-import { handleAdminUsersPagination, handleAdminMessages } from '../handlers/admin';
+import {
+
+handleAdminUsersPagination, handleAdminMessages,
+
+handleAdminPremiumUsers, handleAdminPremiumPagination,
+
+handleAdminPremiumUserDetail, handleAdminPremiumMessage,
+
+handleAdminRevokePremium, handleAdminPremiumBack,
+
+} from '../handlers/admin';
 
 import { handleTopicsMenu, handleTopicOpen, handleTopicWordAction, handleTopicReset } from '../handlers/topics';
 import {
@@ -38,6 +48,7 @@ import {
 import { handleReferralMenu } from '../handlers/referrals';
 
 import { registerSeasonAdminHandlers } from '../handlers/seasonAdmin';
+
 
 import {
   handleSentenceExercise,
@@ -86,6 +97,15 @@ export const registerCallbacks = (bot: Bot) => {
   // Адмін: користувачі
   bot.callbackQuery(/^admin_users_\d+$/, handleAdminUsersPagination);
   bot.callbackQuery('admin_messages', handleAdminMessages);
+  bot.callbackQuery('adm_prem_back', handleAdminPremiumBack);
+
+  bot.callbackQuery(/^adm_prem_page_\d+$/, handleAdminPremiumPagination);
+
+  bot.callbackQuery(/^adm_prem_user_\d+$/, handleAdminPremiumUserDetail);
+
+  bot.callbackQuery(/^adm_prem_msg_\d+$/, handleAdminPremiumMessage);
+
+  bot.callbackQuery(/^adm_prem_revoke_\d+$/, handleAdminRevokePremium);
 
   // Сезон рейтингу
   registerSeasonAdminHandlers(bot);
