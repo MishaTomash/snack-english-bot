@@ -65,7 +65,7 @@ export const handleSentenceExercise = async (ctx: Context) => {
     const user = await User.findOne({ telegramId });
     if (!user) return ctx.reply('Будь ласка, спочатку запустіть /start');
 
-    const exercise = await getRandomSentence(user.seenTexts);
+    const exercise = await getRandomSentence(user.seenTexts, user.level);
 
     if (!exercise) {
       return ctx.reply('😔 Речень поки немає. Адмін скоро додасть!');
