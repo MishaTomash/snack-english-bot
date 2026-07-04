@@ -1,42 +1,71 @@
 import { Api, InlineKeyboard } from 'grammy';
 import { User } from '../models/User';
-import { TopCycle } from '../models/TopCycle';
+import { TopCycle, ITopCycleWinner } from '../models/TopCycle';
 import { formatName } from '../bot/utils/format';
 import { config } from '../config';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const findSeasonWinner = async () => {
-    return await User.findOne({ seasonXp: { $gt: 0 } }).sort({ seasonXp: -1 }).lean();
+// 🥇🥈🥉 — скільки зірок отримує кожне місце
+const PLACE_STARS = [50, 25, 25];
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+// ✅ Топ-3 переможці сезону (замість одного)
+export const findSeasonWinners = async (): Promise<ITopCycleWinner[]> => {
+    const topPlayers = await User.find({ seasonXp: { $gt: 0 } })
+        .sort({ seasonXp: -1 })
+        .limit(3)
+        .lean();
+
+    return topPlayers.map((u, index) => ({
+        place: index + 1,
+        telegramId: u.telegramId,
+        username: u.username ?? null,
+        name: formatName(u),
+        xp: u.seasonXp,
+        stars: PLACE_STARS[index] ?? 0,
+    }));
 };
 
-export const notifyAdminAboutWinner = async (api: Api, winner: any, cycle: any) => {
+export const notifyAdminAboutWinners = async (
+    api: Api,
+    winners: ITopCycleWinner[],
+    cycle: any
+) => {
     const seasonNum = cycle?.seasonNumber ?? '?';
     const cycleId = cycle?._id?.toString() ?? 'latest';
 
     let text: string;
 
-    if (winner) {
-        const usernameStr = winner.username ? `@${winner.username}` : '(немає username)';
-        const profileLink = winner.username
-            ? `https://t.me/${winner.username}`
-            : `tg://user?id=${winner.telegramId}`;
+    if (winners.length > 0) {
+        const winnersBlock = winners
+            .map((w) => {
+                const usernameStr = w.username ? `@${w.username}` : '(немає username)';
+                const profileLink = w.username
+                    ? `https://t.me/${w.username}`
+                    : `tg://user?id=${w.telegramId}`;
+
+                return (
+                    `${MEDALS[w.place - 1] ?? '🏅'} <b>${w.place} місце — ${w.name}</b>\n` +
+                    `🆔 Telegram ID: <code>${w.telegramId}</code>\n` +
+                    `📱 Username: ${usernameStr}\n` +
+                    `⭐ Балів: <b>${w.xp}</b> → наклейка на <b>${w.stars}⭐</b>\n` +
+                    `🔗 <a href="${profileLink}">Відкрити профіль</a>`
+                );
+            })
+            .join('\n\n');
 
         text =
             `🏆 <b>Сезон №${seasonNum} завершено!</b>\n\n` +
-            `<b>Переможець:</b>\n` +
-            `👤 Ім'я: ${formatName(winner)}\n` +
-            `🆔 Telegram ID: <code>${winner.telegramId}</code>\n` +
-            `📱 Username: ${usernameStr}\n` +
-            `⭐ Балів: <b>${winner.seasonXp}</b>\n\n` +
-            `🔗 <a href="${profileLink}">Відкрити профіль</a>\n\n` +
-            `1️⃣ Перейди за посиланням\n` +
-            `2️⃣ Надішли наклейку вручну\n` +
-            `3️⃣ Натисни кнопку нижче`;
+            `<b>Переможці:</b>\n\n` +
+            `${winnersBlock}\n\n` +
+            `1️⃣ Перейди за посиланнями\n` +
+            `2️⃣ Надішли кожному наклейку вручну (50⭐ / 25⭐ / 25⭐)\n` +
+            `3️⃣ Натисни кнопку нижче, щоб оголосити результати всім`;
     } else {
         text =
             `📢 <b>Сезон №${seasonNum} завершено!</b>\n\n` +
-            `Переможця немає — ніхто не набрав балів 😔\n\n` +
+            `Переможців немає — ніхто не набрав балів 😔\n\n` +
             `Натисни кнопку нижче — бот повідомить всіх.`;
     }
 
@@ -50,25 +79,27 @@ export const notifyAdminAboutWinner = async (api: Api, winner: any, cycle: any) 
     });
 };
 
-// ✅ Оновлений текст розсилки + кнопки для користувачів
+// ✅ Розсилка результатів усім користувачам — тепер з топ-3
 export const broadcastSeasonResults = async (
     api: Api,
-    winnerName: string | null,
-    winnerUsername: string | null,
-    winnerXp: number,
+    winners: ITopCycleWinner[],
     seasonNumber: number
 ) => {
     let message: string;
     let keyboard: InlineKeyboard;
 
-    if (winnerName) {
+    if (winners.length > 0) {
+        const winnersBlock = winners
+            .map((w) => `${MEDALS[w.place - 1] ?? '🏅'} <b>${w.name}</b> — ${w.xp} XP (наклейка ${w.stars}⭐)`)
+            .join('\n');
+
         message =
             `🏆 <b>Сезон №${seasonNumber} завершено!</b>\n\n` +
-            `👑 Переможець: <b>${winnerName}</b>\n` +
-            `Вітаємо! Наклейка-кубок вже летить у Telegram 🎁\n\n` +
+            `${winnersBlock}\n\n` +
+            `Вітаємо переможців! Наклейки вже летять у Telegram 🎁\n\n` +
             `——————————————\n` +
             `🆕 <b>Новий сезон — починається зараз!</b>\n\n` +
-            `Хочеш наступного разу бути на першому місці?\n\n` +
+            `Хочеш наступного разу бути в топ-3?\n\n` +
             `💎 <b>Premium дає реальну перевагу:</b>\n` +
             `• Необмежена кількість слів на день\n` +
             `• Більше тестів = більше XP = вище в рейтингу\n` +
@@ -77,9 +108,11 @@ export const broadcastSeasonResults = async (
 
         keyboard = new InlineKeyboard();
 
-        if (winnerUsername) {
-            keyboard.url(`👑 Профіль переможця`, `https://t.me/${winnerUsername}`).row();
-        }
+        winners.forEach((w) => {
+            if (w.username) {
+                keyboard.url(`${MEDALS[w.place - 1] ?? '🏅'} Профіль: ${w.name}`, `https://t.me/${w.username}`).row();
+            }
+        });
 
         keyboard
             .text('💎 Отримати Premium', 'open_premium_menu').row()
@@ -88,15 +121,15 @@ export const broadcastSeasonResults = async (
     } else {
         message =
             `📢 <b>Сезон №${seasonNumber} завершено!</b>\n\n` +
-            `Цього тижня наклейка нікому не дісталась 👀\n` +
-            `Вона вже чекає на переможця наступного сезону!\n\n` +
+            `Цього тижня наклейки нікому не дісталися 👀\n` +
+            `Вони вже чекають на переможців наступного сезону!\n\n` +
             `——————————————\n` +
             `🆕 <b>Новий сезон — нова можливість!</b>\n\n` +
             `💎 <b>З Premium ти маєш більше шансів:</b>\n` +
             `• Вчи скільки хочеш слів — без ліміту\n` +
             `• Проходь більше тестів і набирай XP швидше\n` +
             `• Обганяй інших поки вони сплять 😏\n\n` +
-            `Перший у рейтингу наприкінці тижня забере наклейку! 🏆`;
+            `Топ-3 наприкінці тижня заберуть наклейки: 50⭐ / 25⭐ / 25⭐ 🏆`;
 
         keyboard = new InlineKeyboard()
             .text('💎 Отримати Premium', 'open_premium_menu').row()
@@ -145,14 +178,18 @@ export const ensureActiveCycle = async () => {
 
 export const endSeason = async (api: Api) => {
     const activeCycle = await TopCycle.findOne({ isActive: true });
-    const winner = await findSeasonWinner();
+    const winners = await findSeasonWinners();
 
     if (activeCycle) {
         activeCycle.isActive = false;
-        activeCycle.winnerTelegramId = winner?.telegramId ?? null;
-        activeCycle.winnerName = winner ? formatName(winner) : null;
-        activeCycle.winnerUsername = winner?.username ?? null; // ← зберігаємо username
-        activeCycle.winnerXp = winner?.seasonXp ?? 0;
+        activeCycle.winners = winners;
+
+        // Legacy-поля лишаємо як дзеркало 1 місця (про всяк випадок, якщо десь ще використовуються)
+        activeCycle.winnerTelegramId = winners[0]?.telegramId ?? null;
+        activeCycle.winnerName = winners[0]?.name ?? null;
+        activeCycle.winnerUsername = winners[0]?.username ?? null;
+        activeCycle.winnerXp = winners[0]?.xp ?? 0;
+
         await activeCycle.save();
     }
 
@@ -164,5 +201,5 @@ export const endSeason = async (api: Api) => {
             : null
     );
 
-    await notifyAdminAboutWinner(api, winner, activeCycle);
+    await notifyAdminAboutWinners(api, winners, activeCycle);
 };

@@ -109,9 +109,7 @@ export const handleBroadcastResults = async (ctx: Context) => {
 
     await broadcastSeasonResults(
         ctx.api,
-        cycle.winnerName,
-        cycle.winnerUsername ?? null, // ← передаємо username
-        cycle.winnerXp,
+        cycle.winners ?? [], // ← топ-3 переможці сезону
         cycle.seasonNumber
     );
 
