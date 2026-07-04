@@ -1,61 +1,141 @@
-import cron from 'node-cron';
-import { Bot } from 'grammy';
-import { GrammyError } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
+import { CourseProgress } from '../models/CourseProgress';
+import { Course } from '../models/Course';
 import { User } from '../models/User';
 
-export const startCronJobs = (bot: Bot) => {
-    cron.schedule('0 18 * * *', async () => {
-        console.log('⏰ Cron: перевіряємо користувачів для нагадувань...');
+// ─── Хелпер: поточний UTC "HH:MM" ────────────────────────────────────────────
 
-        const now = new Date();
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
+const currentUTCTime = (): string => {
+  const now = new Date();
+  const hh = String(now.getUTCHours()).padStart(2, '0');
+  const mm = String(now.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
 
-        // Шукаємо юзерів, які були активні ДАВНІШЕ ніж вчора, 
-        // не заблоковані, і яким ми ще НЕ НАГАДУВАЛИ сьогодні
-        const usersToRemind = await User.find({
-            lastActive: { $lt: yesterday },
-            isBlocked: { $ne: true }, // Пропускаємо вже заблокованих
-            $or: [
-                { lastRemindedAt: { $exists: false } },
-                { lastRemindedAt: { $lt: yesterday } } // Щоб не спамити двічі за день
-            ]
-        });
+// ─── Хелпер: чи сьогодні (UTC) дата? ─────────────────────────────────────────
 
-        console.log(`📋 Знайдено ${usersToRemind.length} користувачів для нагадування`);
+const isToday = (date?: Date): boolean => {
+  if (!date) return false;
+  const now = new Date();
+  return (
+    date.getUTCFullYear() === now.getUTCFullYear() &&
+    date.getUTCMonth()    === now.getUTCMonth()    &&
+    date.getUTCDate()     === now.getUTCDate()
+  );
+};
 
-        let sent = 0;
-        let blocked = 0;
-        let failed = 0;
+// ─── Хелпер: скільки днів до дати ────────────────────────────────────────────
 
-        for (const user of usersToRemind) {
-            try {
-                await bot.api.sendMessage(
-                    user.telegramId,
-                    '🔥 *Гей! Твій вогник активності згасає!*\n' +
-                    'Зайди в бот і вивчи хоча б одне слово, щоб врятувати свою серію! 📚',
-                    { parse_mode: 'Markdown' }
-                );
-                sent++;
-            } catch (err) {
-                if (err instanceof GrammyError && err.error_code === 403) {
-                    console.warn(`🚫 Юзер ${user.telegramId} заблокував бота. Позначаємо.`);
-                    user.isBlocked = true;
-                    blocked++;
-                } else {
-                    console.error(`❌ Помилка надсилання юзеру ${user.telegramId}:`, err);
-                    failed++;
-                }
-            } finally {
-                // 👈 Оновлюємо лише дату нагадування, а не реальну активність юзера
-                user.lastRemindedAt = new Date(); 
-                await user.save();
+const daysUntil = (date: Date): number => {
+  const now = Date.now();
+  return Math.ceil((date.getTime() - now) / (1000 * 60 * 60 * 24));
+};
 
-                // ⚠️ НАЙВАЖЛИВІШЕ: Затримка, щоб не покласти базу і Telegram!
-                await new Promise(res => setTimeout(res, 50)); 
-            }
+
+// ─── Cron: нагадування юзерам "нові слова доступні" ──────────────────────────
+// Запускається щогодини, шукає юзерів у яких reminderTime збігається з поточною
+// UTC-годиною і які не були активні сьогодні.
+
+const runWordReminders = async (bot: Bot) => {
+  try {
+    const nowHHMM = currentUTCTime();
+    // Беремо всіх у яких reminderTime починається на поточну годину (HH)
+    const currentHour = nowHHMM.slice(0, 2);
+
+    const usersToRemind = await User.find({
+      reminderTime: { $regex: `^${currentHour}:` },
+    }).lean();
+
+    for (const user of usersToRemind) {
+      // Пропускаємо якщо вже були активні сьогодні
+      if (isToday(user.lastActivityDate)) continue;
+
+      try {
+        await bot.api.sendMessage(
+          user.telegramId,
+          `🌅 <b>Час вчити слова!</b>\n\nСьогоднішня порція нових слів вже чекає на тебе. Вперед! 💪`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: new InlineKeyboard().text('📚 Нові слова', 'next_word'),
+          },
+        );
+
+        // Після відправки — очищаємо reminderTime (одноразове нагадування)
+        await User.findByIdAndUpdate(user._id, { $unset: { reminderTime: '' } });
+      } catch (err: any) {
+        if (err?.error_code !== 403 && err?.error_code !== 400) {
+          console.error(`Помилка нагадування слів для ${user.telegramId}:`, err.message);
         }
+      }
+    }
+  } catch (err) {
+    console.error('Помилка cron-job нагадувань слів:', err);
+  }
+};
 
-        console.log(`✅ Cron завершено: надіслано ${sent}, заблоковано ${blocked}, помилок ${failed}`);
-    });
+// ─── Cron: нагадування про закінчення Premium ────────────────────────────────
+// Запускається раз на добу (перевіряємо щогодини, але шлемо тільки раз).
+
+const runPremiumExpiryWarnings = async (bot: Bot) => {
+  try {
+    const now = new Date();
+
+    // Знаходимо Premium-юзерів у яких ≤3 дні до закінчення
+    const warningThreshold = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    const expiringUsers = await User.find({
+      isPremium: true,
+      premiumExpiresAt: { $lte: warningThreshold, $gte: now },
+      premiumReminderSentAt: { $exists: false }, // 👈 ДОДАНО: ще не нагадували в цьому періоді
+    }).lean();
+
+    for (const user of expiringUsers) {
+      if (!user.premiumExpiresAt) continue;
+
+      const days = daysUntil(user.premiumExpiresAt);
+      if (days < 0) continue;
+
+      const dayLabel = days === 0 ? 'сьогодні' : days === 1 ? 'завтра' : `через ${days} дні`;
+
+      try {
+        await bot.api.sendMessage(
+          user.telegramId,
+          `⚠️ <b>Premium закінчується ${dayLabel}!</b>\n\n` +
+          `Не зупиняй навчання — продовж підписку та зберігай прогрес. 🚀`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: new InlineKeyboard().text('💎 Продовжити Premium', 'get_premium'),
+          },
+        );
+
+        // 👈 ДОДАНО: позначаємо, що нагадування вже надіслано,
+        // інакше юзер отримував би це повідомлення щогодини (крон працює щогодини)
+        await User.findByIdAndUpdate(user._id, { premiumReminderSentAt: now });
+      } catch (err: any) {
+        if (err?.error_code !== 403 && err?.error_code !== 400) {
+          console.error(`Помилка нагадування Premium для ${user.telegramId}:`, err.message);
+        }
+      }
+    }
+
+    // Деактивуємо прострочений Premium
+    await User.updateMany(
+      { isPremium: true, premiumExpiresAt: { $lt: now } },
+      { $set: { isPremium: false } },
+    );
+  } catch (err) {
+    console.error('Помилка cron-job перевірки Premium:', err);
+  }
+};
+
+// ─── Головна точка запуску ────────────────────────────────────────────────────
+
+export const startCronJobs = (bot: Bot) => {
+  setInterval(async () => {
+
+    await runWordReminders(bot);
+    await runPremiumExpiryWarnings(bot);
+  }, 60 * 60 * 1000); // щогодини
+
+  console.log('✅ Cron jobs запущено (курси, слова, Premium)');
 };

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { bot } from './bot';
 import { config } from './config';
 import { startCronJobs } from './bot/cron';
+import { startActivityStreakCronJobs } from './cron'; // 👈 ДОДАНО
 import { GrammyError, HttpError } from 'grammy'; // 👈 ДОДАНО ІМПОРТ 
 
 // 👇 ДОДАНО ОБРОБНИК ПОМИЛОК
@@ -30,6 +31,7 @@ const startApp = async () => {
     console.log('✅ Успішно підключено до MongoDB!');
 
     startCronJobs(bot);
+    startActivityStreakCronJobs(bot); // 👈 ДОДАНО
 
     console.log('⏳ Запуск бота...');
     await bot.start();

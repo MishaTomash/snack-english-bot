@@ -162,6 +162,10 @@ const grantPremium = async (telegramId: number, days: number = 30) => {
 
   await User.findOneAndUpdate(
     { telegramId },
-    { isPremium: true, premiumExpiresAt }
+    {
+      isPremium: true,
+      premiumExpiresAt,
+      $unset: { premiumReminderSentAt: '' }, // скидаємо, щоб нагадування спрацювало знову для нового періоду
+    }
   );
 };

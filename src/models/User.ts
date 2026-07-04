@@ -10,6 +10,7 @@ export interface IUser extends Document {
     xp: number;
     isPremium: boolean;
     premiumExpiresAt?: Date;
+    premiumReminderSentAt?: Date;
     wordsLearnedToday: number;
     lastWordLearnDate?: Date;
     carriedOverWords: number;
@@ -52,6 +53,7 @@ const UserSchema: Schema = new Schema({
     xp: { type: Number, default: 0 },
     isPremium: { type: Boolean, default: false },
     premiumExpiresAt: { type: Date },
+    premiumReminderSentAt: { type: Date },
     wordsLearnedToday: { type: Number, default: 0 },
     lastWordLearnDate: { type: Date },
     carriedOverWords: { type: Number, default: 0 },
