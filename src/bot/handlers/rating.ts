@@ -79,7 +79,7 @@ export const handleTopMenu = async (ctx: Context) => {
 
         message +=
             `\n\n━━━━━━━━━━━━━━━\n` +
-            `🎁 Топ-3 отримують наклейку-кубок: 🥇 50⭐ · 🥈 25⭐ · 🥉 25⭐\n` +
+            `🎁 Топ-3 отримують наклейку: 🥇 50⭐ · 🥈 25⭐ · 🥉 25⭐\n` +
             `Наступний переможець — можливо ти.`;
 
         const keyboard = new InlineKeyboard()
