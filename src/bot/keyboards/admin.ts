@@ -1,5 +1,3 @@
-
-
 import { Keyboard } from 'grammy';
 
 export const createAdminMenu = () => {
@@ -9,6 +7,6 @@ export const createAdminMenu = () => {
     .text('🎓 Керування курсами').text('🏆 Сезон рейтингу').row()
     .text('👥 Користувачі').text('💎 Premium юзери').text('🧹заблокованих').row()
     .text('🚪 Вийти з адмінки').row()
-    .text('📢 Розсилка').text('🔄 Оновити меню')
+    .text('📢 Розсилка').text('🔗 Реф. розсилка').text('🔄 Оновити меню') // 👈 додано
     .resized();
 };

@@ -3,7 +3,7 @@ import { checkWordLimits } from '../middlewares/limits';
 
 import {
   handleExitAdmin, handleAddWordPrompt, handleAddTestPrompt,
-  handleAdminStats, handleAdminUsers, handleBroadcastStart
+  handleAdminStats, handleAdminUsers, handleBroadcastStart, handleReferralBroadcastStart
 } from '../handlers/admin';
 import { handleAdminTopicsMenu } from '../handlers/adminTopics';
 import { handleAdminCoursesMenu, handleForceMenuUpdate } from '../handlers/adminCourses';
@@ -38,6 +38,8 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🧹заблокованих', handleClearBlockedUsers);
   bot.hears('✍️ Додати речення', handleAddSentencePrompt);
   bot.hears('💎 Premium юзери', handleAdminPremiumUsers);
+  bot.hears('🔗 Реф. розсилка', handleReferralBroadcastStart); // 👈 додай цей рядок
+
 
 // === НОВЕ ГОЛОВНЕ МЕНЮ ===
   bot.hears('📚 Навчання', async (ctx) => {

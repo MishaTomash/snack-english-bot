@@ -1,5 +1,6 @@
 import { Context } from 'grammy';
 import { User } from '../../models/User';
+import { buildReferralShareMessage, buildDefaultChainText } from '../utils/referral';
 
 // 1. Хендлер для кнопки "👥 Запросити друзів"
 export const handleReferralMenu = async (ctx: Context) => {
@@ -10,23 +11,12 @@ export const handleReferralMenu = async (ctx: Context) => {
     if (!user) return;
 
     const botInfo = await ctx.api.getMe();
-    const refLink = `https://t.me/${botInfo.username}?start=ref_${telegramId}`;
     const invited = user.referralCount || 0;
 
-    const text = `👥 *Запроси друзів — отримай Premium БЕЗКОШТОВНО*
+    const text = buildDefaultChainText(invited);
+    const { keyboard } = buildReferralShareMessage(botInfo.username!, telegramId, text);
 
-Твоє реферальне посилання:
-\`${refLink}\`
-
-━━━━━━━━━━━━━━━━━━━━━
-🎯 *Умова:* 3 друзі, які почнуть вчити англійську
-✅ *Прогрес:* ${invited}/3 друзів
-🏆 *Нагорода:* Premium на місяць
-━━━━━━━━━━━━━━━━━━━━━
-
-💡 *Важливо:* друг має вивчити 5 слів — тільки тоді запрошення зарахується
-`;
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };
 
 // 2. Функція, яку ми викличемо, коли друг виконає "Мінімальну дію" (вивчить 5 слів)
@@ -48,25 +38,36 @@ export const checkAndRewardReferrer = async (ctx: Context, userId: number) => {
         // Додаємо +1 до запрошених
         inviter.referralCount = (inviter.referralCount || 0) + 1;
 
-        // Перевіряємо, чи досяг він 3 запрошених
-        if (inviter.referralCount >= 1 && !inviter.referralRewardClaimed) {
+        // 🏆 3+ запрошених → Premium на місяць (одноразова нагорода)
+        if (inviter.referralCount >= 3 && !inviter.referralRewardClaimed) {
             inviter.referralRewardClaimed = true;
             inviter.isPremium = true;
 
-            // Даємо преміум на 30 днів
             const premiumDate = new Date();
             premiumDate.setDate(premiumDate.getDate() + 30);
             inviter.premiumExpiresAt = premiumDate;
 
             await inviter.save();
 
-            // Надсилаємо повідомлення щасливчику!
             await ctx.api.sendMessage(inviter.telegramId,
                 `🎉 *Вітаю!* Ти запросив 3 друзів, які почали вчити англійську.\n\n` +
                 `Тобі автоматично нараховано *на місяць Premium БЕЗКОШТОВНО!* ⭐\n` +
                 `Дякуємо, що розвиваєш спільноту 🙌`,
                 { parse_mode: 'Markdown' }
             ).catch(() => { });
+
+        // ⭐ Кожен наступний друг після 3-го → +200 XP до сезонного рейтингу
+        } else if (inviter.referralCount > 3) {
+            inviter.seasonXp = (inviter.seasonXp || 0) + 200;
+            await inviter.save();
+
+            await ctx.api.sendMessage(inviter.telegramId,
+                `🔥 Ще один друг приєднався завдяки твоєму запрошенню!\n\n` +
+                `Тобі нараховано *+200 XP* до сезонного рейтингу 🏆\n` +
+                `Всього запрошено: *${inviter.referralCount}*`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => { });
+
         } else {
             await inviter.save();
         }

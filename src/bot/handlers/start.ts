@@ -3,6 +3,7 @@ import { GrammyError } from 'grammy';
 import { User } from '../../models/User';
 import { levelKeyboard } from '../keyboards/level';
 import { createMainMenu } from '../keyboards/main';
+import { buildReferralShareMessage, buildDefaultChainText } from '../utils/referral'; // 👈 новий імпорт
 
 export const handleStart = async (ctx: CommandContext<Context>) => {
   const telegramId = ctx.from?.id;
@@ -37,6 +38,16 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
         `Привіт, ${firstName}! 👋\n🌟 SnackEnglish допоможе тобі вивчати англійську легко та щодня.\n\nДавай почнемо! Обери свій поточний рівень:`,
         { reply_markup: levelKeyboard }
       );
+
+      // 🔗 Ланцюгове реферальне повідомлення — щоб новий юзер теж міг запрошувати друзів
+      try {
+        const botInfo = await ctx.api.getMe();
+        const chainText = buildDefaultChainText(0);
+        const { keyboard } = buildReferralShareMessage(botInfo.username!, telegramId, chainText);
+        await ctx.reply(chainText, { parse_mode: 'Markdown', reply_markup: keyboard });
+      } catch (chainErr) {
+        console.error('Не вдалося надіслати реферальне повідомлення новому юзеру:', chainErr);
+      }
     } else {
       user.username = username;
       await user.save();
@@ -54,12 +65,11 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
   } catch (error) {
     if (error instanceof GrammyError && error.error_code === 403) {
       console.warn(`⚠️ Бот не зміг надіслати повідомлення, бо користувач (ID: ${telegramId}) заблокував його.`);
-      return; // 👈 Мовчки виходимо — це не баг
+      return;
     }
 
     console.error('Помилка при реєстрації:', error);
 
-    // Спроба надіслати повідомлення про помилку — теж може бути заблокована
     try {
       await ctx.reply('Вибач, сталася помилка. Спробуй пізніше.');
     } catch (replyError) {

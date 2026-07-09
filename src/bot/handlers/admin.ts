@@ -6,6 +6,7 @@ import { Word } from '../../models/Word';
 import { TestQuestion } from '../../models/TestQuestion';
 import { User } from '../../models/User';
 import { TopCycle } from '../../models/TopCycle';
+import { buildReferralShareMessage } from '../utils/referral';
 
 // ─── Константи ───────────────────────────────────────────────────────────────
 
@@ -408,6 +409,18 @@ export const handleBroadcastStart = async (ctx: Context) => {
     { parse_mode: 'HTML' },
   );
 };
+export const handleReferralBroadcastStart = async (ctx: Context) => {
+  if (!isAdmin(ctx)) return;
+  adminState.set(ctx.from!.id, 'waiting_for_referral_broadcast');
+  await ctx.reply(
+    '📢🔗 <b>Реферальна розсилка</b>\n\n' +
+    'Надішли текст повідомлення. Кожен юзер отримає цей текст + персональну кнопку ' +
+    '"📤 Поділитися з другом" з його власним реферальним посиланням.\n\n' +
+    'Можеш використати <code>{name}</code> — підставиться імʼя юзера.\n\n' +
+    '<i>Для скасування напиши /cancel</i>',
+    { parse_mode: 'HTML' }
+  );
+};
 export const handleAddSentencePrompt = async (ctx: Context) => {
   if (ctx.from?.id !== config.ADMIN_ID) return;
 
@@ -487,6 +500,45 @@ export const handleAdminMessages = async (ctx: Context, next: NextFunction) => {
     }
     return 'fail';
   };
+
+  // --- ОБРОБКА РЕФЕРАЛЬНОЇ РОЗСИЛКИ ---
+  if (state === 'waiting_for_referral_broadcast') {
+    adminState.delete(adminId);
+    const template = ctx.message?.text?.trim();
+
+    if (!template) {
+      return ctx.reply('❌ Порожній текст. Спробуй ще раз (або /cancel).');
+    }
+
+    await ctx.reply('⏳ Починаю реферальну розсилку...');
+
+    try {
+      const botInfo = await ctx.api.getMe();
+      const users = await User.find({}).select('telegramId firstName').lean();
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const user of users) {
+        const personalizedText = template.replace(/\{name\}/g, user.firstName || 'друже');
+        const { text, keyboard } = buildReferralShareMessage(botInfo.username!, user.telegramId, personalizedText);
+
+        const result = await sendWithRetry(() =>
+          ctx.api.sendMessage(user.telegramId, text, { parse_mode: 'HTML', reply_markup: keyboard })
+        );
+        result === 'ok' ? successCount++ : failCount++;
+        await new Promise(res => setTimeout(res, 50));
+      }
+
+      return ctx.reply(
+        `✅ <b>Реферальну розсилку завершено!</b>\n\nУспішно: <b>${successCount}</b>\nНе вдалося: <b>${failCount}</b>`,
+        { parse_mode: 'HTML' },
+      );
+    } catch (error) {
+      console.error('Помилка реферальної розсилки:', error);
+      return ctx.reply('❌ Критична помилка під час реферальної розсилки.');
+    }
+  }
+
   // --- ОБРОБКА РОЗСИЛКИ ---
   if (state === 'waiting_for_broadcast') {
     adminState.delete(adminId);

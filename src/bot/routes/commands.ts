@@ -6,10 +6,10 @@ import { handleStart } from '../handlers/start';
 import { handleWords } from '../handlers/words';
 import { sendRandomTest } from '../handlers/tests';
 import { showProfile } from '../handlers/profile';
-import { handleAdminCommand } from '../handlers/admin';
+import { handleAdminCommand, handleReferralBroadcastStart } from '../handlers/admin'; // 👈 додано handleReferralBroadcastStart
 import { handleCoursesList } from '../handlers/courses';
 import { createNewTopicCommand } from '../handlers/adminTopics';
-import { handleTopMenu } from '../handlers/rating'; 
+import { handleTopMenu } from '../handlers/rating';
 import { createLearningMenu } from '../keyboards/main';
 
 export const registerCommands = (bot: Bot) => {
@@ -22,10 +22,12 @@ export const registerCommands = (bot: Bot) => {
     bot.command('courses', handleCoursesList);
     bot.command('new_topic', createNewTopicCommand);
     bot.command('top', handleTopMenu);
+    bot.command('broadcast_ref', handleReferralBroadcastStart); // 👈 нова команда для адміна
+
 
     // 🆘 Команда HELP (Красиве форматування списку команд)
     bot.command('help', async (ctx) => {
-        const helpText = 
+        const helpText =
             `❓ <b>Довідковий центр SnackEnglish</b>\n\n` +
             `Ось список команд, які допоможуть тобі в навчанні:\n\n` +
             `🚀 <b>Основні:</b>\n` +
@@ -47,7 +49,7 @@ export const registerCommands = (bot: Bot) => {
     bot.command('learn', async (ctx) => {
         await ctx.reply(
             `🎓 <b>Розділ навчання</b>\n\n` +
-            `Що будемо практикувати сьогодні? Обирай потрібний режим нижче: 👇`, 
+            `Що будемо практикувати сьогодні? Обирай потрібний режим нижче: 👇`,
             {
                 parse_mode: 'HTML',
                 reply_markup: createLearningMenu(),
