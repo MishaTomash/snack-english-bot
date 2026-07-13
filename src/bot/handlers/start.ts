@@ -39,15 +39,6 @@ export const handleStart = async (ctx: CommandContext<Context>) => {
         { reply_markup: levelKeyboard }
       );
 
-      // 🔗 Ланцюгове реферальне повідомлення — щоб новий юзер теж міг запрошувати друзів
-      try {
-        const botInfo = await ctx.api.getMe();
-        const chainText = buildDefaultChainText(0);
-        const { keyboard } = buildReferralShareMessage(botInfo.username!, telegramId, chainText);
-        await ctx.reply(chainText, { parse_mode: 'Markdown', reply_markup: keyboard });
-      } catch (chainErr) {
-        console.error('Не вдалося надіслати реферальне повідомлення новому юзеру:', chainErr);
-      }
     } else {
       user.username = username;
       await user.save();
