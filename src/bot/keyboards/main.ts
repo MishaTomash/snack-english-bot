@@ -4,8 +4,9 @@ import { Keyboard, InlineKeyboard } from 'grammy';
 export const createMainMenu = () => {
   return new Keyboard()
     .text('📚 Навчання').row()
+    .text('💬 Чатік (NEW 🔥)').row()
     .text('👤 Профіль').text('⚙️ Налаштування').row()
-    .text('🏆 Топчик').row()
+    .text('🏆 Топчик').row() 
     .resized();
 };
 

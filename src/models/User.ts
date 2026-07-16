@@ -41,6 +41,8 @@ export interface IUser extends Document {
     lastTestDate?: Date;
     sentencesTodayCount: number;
     lastSentenceDate?: Date;
+    chatMessagesToday: number;
+    lastChatMessageDate?: Date;
 }
 
 const UserSchema: Schema = new Schema({
@@ -83,6 +85,8 @@ const UserSchema: Schema = new Schema({
     lastTestDate: { type: Date },
     sentencesTodayCount: { type: Number, default: 0 },
     lastSentenceDate: { type: Date },
+    chatMessagesToday: { type: Number, default: 0 },
+    lastChatMessageDate: { type: Date },
 });
 
 // ✅ ОПТИМІЗАЦІЯ: Складені індекси для швидких запитів

@@ -20,7 +20,11 @@ import { handleTopicsMenu } from '../handlers/topics';
 import { sendPremiumMenu } from '../handlers/premium';
 import { handleClearBlockedUsers } from '../handlers/adminCleanUser';
 import { createLearningMenu } from '../keyboards/main';
-import { handleAddSentencePrompt, handleAdminPremiumUsers  } from '../handlers/admin'; 
+import { handleAddSentencePrompt, handleAdminPremiumUsers } from '../handlers/admin';
+import {
+  handleStartChat, handleExitChat,
+  handleChatHint, handleChatTranslate,
+} from '../handlers/chat';
 
 export const registerHears = (bot: Bot) => {
   // Адмін
@@ -41,7 +45,7 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🔗 Реф. розсилка', handleReferralBroadcastStart); // 👈 додай цей рядок
 
 
-// === НОВЕ ГОЛОВНЕ МЕНЮ ===
+  // === НОВЕ ГОЛОВНЕ МЕНЮ ===
   bot.hears('📚 Навчання', async (ctx) => {
     await ctx.reply('🎓 <b>Розділ навчання</b>\n\nЩо будемо практикувати сьогодні? Обирай потрібний режим нижче: 👇', {
       parse_mode: 'HTML',
@@ -54,11 +58,14 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🏆 Топчик', handleTopMenu);
   bot.hears('💎 Premium', sendPremiumMenu);
 
-  // === СТАРІ КНОПКИ (Залишаємо для зворотної сумісності старих користувачів) ===
   bot.hears('📚 Вчити слова', checkWordLimits, handleWords);
   bot.hears('📝 Перевірка слів', sendLearnedWordsTest);
   bot.hears('🎯 Міні-тести', checkTestLimits, sendRandomTest);
   bot.hears('💾 Словничок', handleSavedWords);
   bot.hears('🎓 Курси', handleCoursesList);
   bot.hears('📚 Слова по темах', handleTopicsMenu);
+  bot.hears('💬 Чатік (NEW 🔥)', handleStartChat);
+  bot.hears('❌ Завершити чат', handleExitChat);
+  bot.hears('💡 Підказка', handleChatHint);
+  bot.hears('📝 Перекласти', handleChatTranslate);
 };

@@ -11,12 +11,15 @@ import { registerPayments } from './routes/payments';
 import { registerErrorHandler } from './routes/errors';
 
 import { setupSeasonScheduler } from '../services/seasonScheduler';
-import { setupBotCommands } from './setup/commands'; // ← додай імпорт
+import { setupBotCommands } from './setup/commands'; 
+import { chatModeMiddleware } from './middlewares/chatMode';
+
 
 export const bot = new Bot(config.BOT_TOKEN);
 
 registerLoggers(bot);
 bot.use(trackActivity);
+bot.use(chatModeMiddleware);
 
 registerCommands(bot);
 registerCallbacks(bot);
