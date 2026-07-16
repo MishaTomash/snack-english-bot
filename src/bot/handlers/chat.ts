@@ -11,15 +11,16 @@ import { createChatMenu } from '../keyboards/chat';
 import { createMainMenu } from '../keyboards/main';
 import { getRandomTopic, getTopicById } from '../../services/chat/topics';
 import { buildSystemPrompt } from '../../services/chat/promptBuilder';
-import { startSession, getSession, endSession, enqueue } from '../../services/chat/sessionManager';
+import { startSession, getSession, endSession, enqueue, touchSession, registerInactivityHandler } from '../../services/chat/sessionManager';
+import { Api } from 'grammy';
 import { isNotEnglish } from '../../services/chat/languageCheck';
 import {
-  getAiChatReply,
-  getAiChatReplyWithCorrection,
-  getChatAnalysis,
-  ChatAnalysisResult,
-  getChatHint,
-  translateToUkrainian,
+    getAiChatReply,
+    getAiChatReplyWithCorrection,
+    getChatAnalysis,
+    ChatAnalysisResult,
+    getChatHint,
+    translateToUkrainian,
 } from '../../services/chat/chatAiService';
 import {
     canSendChatMessage,
@@ -30,6 +31,23 @@ import {
     isSuspiciousMessage,
 } from '../../services/chat/rateLimiter';
 import { transcribeVoiceMessage, MAX_VOICE_DURATION_SECONDS } from '../../services/chat/voiceService';
+
+
+const api = new Api(config.BOT_TOKEN);
+
+registerInactivityHandler(async (telegramId: number) => {
+  try {
+    await ChatSession.deleteOne({ telegramId });
+
+    await api.sendMessage(
+      telegramId,
+      '⏰ Чат завершено через бездіяльність (15 хв). Натисни «💬 Чатік», щоб почати знову 👇',
+      { reply_markup: createMainMenu() }
+    );
+  } catch (err) {
+    console.error('Помилка авто-завершення чату:', err);
+  }
+});
 
 export const handleStartChat = async (ctx: Context) => {
     const telegramId = ctx.from?.id;
@@ -59,19 +77,61 @@ export const handleStartChat = async (ctx: Context) => {
 };
 
 const sendAiOpeningLine = async (ctx: Context, telegramId: number) => {
-  const session = getSession(telegramId);
-  if (!session) return;
+    const session = getSession(telegramId);
+    if (!session) return;
 
-  const systemPrompt = buildSystemPrompt(session.level, session.topic);
-  const openingInstruction =
-    systemPrompt +
-    `\n\nThis is the VERY FIRST message of the conversation. Start with a short, friendly greeting (like "Hi!" or "Hello!") ` +
-    `and THEN ask your first simple question about the topic in the SAME message.`;
+    const systemPrompt = buildSystemPrompt(session.level, session.topic);
 
-  const reply = await getAiChatReply(openingInstruction, []);
-  session.conversation.addAssistantMessage(reply);
+    const openingInstruction = `
+${systemPrompt}
 
-  await ctx.reply(reply);
+This is the first message.
+
+Rules:
+- Use very easy English.
+- Match the user's level exactly.
+- Keep it short.
+- 2 short sentences only.
+- Be friendly.
+- Do not use difficult words.
+- Do not explain anything.
+- Do not teach.
+
+Say hello.
+
+Say today's topic.
+
+Ask ONE easy question about the topic.
+
+Example for A1:
+
+"Hi! 😊
+
+Today we talk about family.
+
+Do you have a big family?"
+
+Example for A2:
+
+"Hey! 😄
+
+Today let's talk about movies.
+
+What movie do you like?"
+
+Example for B1:
+
+"Hey! 😊
+
+Today let's chat about travel.
+
+Where did you travel last?"
+`;
+
+    const reply = await getAiChatReply(openingInstruction, []);
+    session.conversation.addAssistantMessage(reply);
+
+    await ctx.reply(reply);
 };
 
 const formatAnalysis = (analysis: ChatAnalysisResult): string => {
@@ -103,8 +163,6 @@ export const handleExitChat = async (ctx: Context) => {
 
     const session = getSession(telegramId);
 
-    await ChatSession.findOneAndUpdate({ telegramId }, { isActive: false, isPaused: false });
-
     if (session) {
         const history = session.conversation.getHistory();
         const analysis = await getChatAnalysis(history, session.level);
@@ -114,8 +172,8 @@ export const handleExitChat = async (ctx: Context) => {
         }
     }
 
+    await ChatSession.deleteOne({ telegramId });
     endSession(telegramId);
-
     await ctx.reply('✅ Чат завершено. Повертаю тебе у звичайний режим 👇', {
         reply_markup: createMainMenu(),
     });
@@ -139,6 +197,8 @@ const isTooShortToCheck = (text: string): boolean => {
 };
 
 export const processChatMessage = async (ctx: Context, telegramId: number, text: string) => {
+    touchSession(telegramId); 
+
     if (isOnCooldown(telegramId)) return;
     registerMessageTime(telegramId);
 
@@ -253,62 +313,66 @@ const downloadTelegramFile = (telegramFilePath: string, telegramId: number): Pro
 };
 
 export const handleChatHint = async (ctx: Context) => {
-  const telegramId = ctx.from?.id;
-  if (!telegramId) return;
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return;
 
-  const session = getSession(telegramId);
-  if (!session) {
-    await ctx.reply('⚠️ Немає активного чату. Натисни «💬 Чатік», щоб почати.');
-    return;
-  }
+    touchSession(telegramId);
 
-  const statusMsg = await ctx.reply('💡 Думаю над підказкою...');
+    const session = getSession(telegramId);
+    if (!session) {
+        await ctx.reply('⚠️ Немає активного чату. Натисни «💬 Чатік», щоб почати.');
+        return;
+    }
 
-  try {
-    const systemPrompt = buildSystemPrompt(session.level, session.topic);
-    const hint = await getChatHint(systemPrompt, session.conversation.getHistory());
-    const hintUa = await translateToUkrainian(hint);
+    const statusMsg = await ctx.reply('💡 Думаю над підказкою...');
 
-    await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => {});
-    await ctx.reply(`💡 <b>Можеш відповісти так:</b>\n"${hint}"\n\n<i>${hintUa}</i>`, {
-      parse_mode: 'HTML',
-    });
-  } catch (err) {
-    console.error('Помилка підказки:', err);
-    await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => {});
-    await ctx.reply('⚠️ Не вдалося згенерувати підказку.');
-  }
+    try {
+        const systemPrompt = buildSystemPrompt(session.level, session.topic);
+        const hint = await getChatHint(systemPrompt, session.conversation.getHistory());
+        const hintUa = await translateToUkrainian(hint);
+
+        await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => { });
+        await ctx.reply(`💡 <b>Можеш відповісти так:</b>\n"${hint}"\n\n<i>${hintUa}</i>`, {
+            parse_mode: 'HTML',
+        });
+    } catch (err) {
+        console.error('Помилка підказки:', err);
+        await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => { });
+        await ctx.reply('⚠️ Не вдалося згенерувати підказку.');
+    }
 };
 
 export const handleChatTranslate = async (ctx: Context) => {
-  const telegramId = ctx.from?.id;
-  if (!telegramId) return;
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return;
 
-  const session = getSession(telegramId);
-  if (!session) {
-    await ctx.reply('⚠️ Немає активного чату. Натисни «💬 Чатік», щоб почати.');
-    return;
-  }
+    touchSession(telegramId);
 
-  const history = session.conversation.getHistory();
-  const lastAiMessage = [...history].reverse().find(turn => turn.role === 'assistant');
+    const session = getSession(telegramId);
+    if (!session) {
+        await ctx.reply('⚠️ Немає активного чату. Натисни «💬 Чатік», щоб почати.');
+        return;
+    }
 
-  if (!lastAiMessage) {
-    await ctx.reply('⚠️ Поки що нема що перекладати.');
-    return;
-  }
+    const history = session.conversation.getHistory();
+    const lastAiMessage = [...history].reverse().find(turn => turn.role === 'assistant');
 
-  const statusMsg = await ctx.reply('📝 Перекладаю...');
+    if (!lastAiMessage) {
+        await ctx.reply('⚠️ Поки що нема що перекладати.');
+        return;
+    }
 
-  try {
-    const translation = await translateToUkrainian(lastAiMessage.content);
-    await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => {});
-    await ctx.reply(`📝 <b>Переклад:</b>\n${translation}`, { parse_mode: 'HTML' });
-  } catch (err) {
-    console.error('Помилка перекладу:', err);
-    await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => {});
-    await ctx.reply('⚠️ Не вдалося перекласти повідомлення.');
-  }
+    const statusMsg = await ctx.reply('📝 Перекладаю...');
+
+    try {
+        const translation = await translateToUkrainian(lastAiMessage.content);
+        await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => { });
+        await ctx.reply(`📝 <b>Переклад:</b>\n${translation}`, { parse_mode: 'HTML' });
+    } catch (err) {
+        console.error('Помилка перекладу:', err);
+        await ctx.api.deleteMessage(ctx.chat!.id, statusMsg.message_id).catch(() => { });
+        await ctx.reply('⚠️ Не вдалося перекласти повідомлення.');
+    }
 };
 
 export const handleChatTranslateStub = async (ctx: Context) => {
