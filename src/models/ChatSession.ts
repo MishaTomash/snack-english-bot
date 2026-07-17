@@ -18,6 +18,4 @@ const ChatSessionSchema: Schema = new Schema({
   messageCount: { type: Number, default: 0 },
 });
 
-ChatSessionSchema.index({ telegramId: 1 });
-
 export const ChatSession = mongoose.model<IChatSession>('ChatSession', ChatSessionSchema);
