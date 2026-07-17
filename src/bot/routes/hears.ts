@@ -25,6 +25,8 @@ import {
   handleStartChat, handleExitChat,
   handleChatHint, handleChatTranslate,
 } from '../handlers/chat';
+import { handleAdminPaymentModeMenu } from '../handlers/paymentAdmin';
+
 
 export const registerHears = (bot: Bot) => {
   // Адмін
@@ -42,7 +44,9 @@ export const registerHears = (bot: Bot) => {
   bot.hears('🧹заблокованих', handleClearBlockedUsers);
   bot.hears('✍️ Додати речення', handleAddSentencePrompt);
   bot.hears('💎 Premium юзери', handleAdminPremiumUsers);
-  bot.hears('🔗 Реф. розсилка', handleReferralBroadcastStart); // 👈 додай цей рядок
+  bot.hears('🔗 Реф. розсилка', handleReferralBroadcastStart);
+  bot.hears('💳 Спосіб оплати', handleAdminPaymentModeMenu);
+
 
 
   // === НОВЕ ГОЛОВНЕ МЕНЮ ===

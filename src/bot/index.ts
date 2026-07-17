@@ -14,6 +14,8 @@ import { setupSeasonScheduler } from '../services/seasonScheduler';
 import { setupBotCommands } from './setup/commands'; 
 import { chatModeMiddleware } from './middlewares/chatMode';
 import { handleStatusChatCommand, handleStatusChatPageCallback, handleStatusChatUserCallback } from './handlers/adminChat';
+import { registerPaymentPhotos } from './routes/paymentPhotos';
+
 
 
 
@@ -27,6 +29,7 @@ registerCommands(bot);
 registerCallbacks(bot);
 registerTextHandlers(bot);
 registerHears(bot);
+registerPaymentPhotos(bot);
 registerPayments(bot);
 registerErrorHandler(bot);
 

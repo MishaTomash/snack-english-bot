@@ -48,6 +48,8 @@ import {
 import { handleReferralMenu } from '../handlers/referrals';
 
 import { registerSeasonAdminHandlers } from '../handlers/seasonAdmin';
+import { sendJarPremiumOffer, handleJarPaidButton } from '../handlers/jarPayment';
+import { handleSetPaymentMode } from '../handlers/paymentAdmin';
 
 
 import {
@@ -58,6 +60,14 @@ import {
 } from '../handlers/sentences';
 
 export const registerCallbacks = (bot: Bot) => {
+
+  bot.callbackQuery('pay_jar', sendJarPremiumOffer);
+  bot.callbackQuery(/^jar_paid_/, handleJarPaidButton);
+
+  bot.callbackQuery('set_payment_card', handleSetPaymentMode);
+  bot.callbackQuery('set_payment_jar', handleSetPaymentMode);
+
+  
   // Загальні
   bot.callbackQuery(/^level_/, handleLevelSelection);
   bot.callbackQuery('change_level', handleChangeLevelClick);

@@ -3,8 +3,9 @@ import { User } from '../../models/User';
 import { TopCycle } from '../../models/TopCycle';
 import { config } from '../../config';
 import { LabeledPrice } from 'grammy/types';
+import { getPaymentMode } from '../../services/paymentModeService';
 
-// ─── 1. ГОЛОВНЕ МЕНЮ PREMIUM (Вибір способу) ──────────────────────────────
+
 export const sendPremiumMenu = async (ctx: Context) => {
   const telegramId = ctx.from?.id;
   if (!telegramId) return;
@@ -17,25 +18,23 @@ export const sendPremiumMenu = async (ctx: Context) => {
     );
   }
 
-  const text = `
-💎 *SnackEnglish Premium*
+  const mode = await getPaymentMode();
+  const keyboard = new InlineKeyboard();
 
-Безлім слів, курси + тести, більше хр,  і ніхто не скаже «ти сьогодні все вивчив, йди геть».
+  // let text = `💎 *SnackEnglish Premium*\n\nБезлім слів, курси + тести, більше хр, і ніхто не скаже «ти сьогодні все вивчив, йди геть».\n\nОбери варіант:\n\n`;
+let text = `💎 *SnackEnglish Premium*\n\nПоки ти вчиш — русоріз буде працювати 🫡🇺🇦\n\nОбери варіант:\n\n`;
 
-Обери варіант:
-
-💳 *Картка (Mono/Приват)* — 40 грн (без комісій)
-⭐ *Telegram Stars* — 75 ★ (комісія Apple/Telegram, тому дорожче)
-
-🎁 *Халява*: запроси 3 друзів → Premium безкоштовно.
-  `;
-
-  const keyboard = new InlineKeyboard()
-    .text('💳 40 грн (картка)', 'pay_card')
-    .row()
-    .text('⭐ 75 ★ (Stars)', 'pay_stars')
-    .row()
-    .text('👥 Запросити друзів (безкоштовно)', 'pay_referral');
+  if (mode === 'card') {
+    text += `💳 *Картка (Mono/Приват)* — 40 грн (без комісій)\n⭐ *Telegram Stars* — 75 ★ (комісія Apple/Telegram, тому дорожче)\n\n🎁 *Халява*: запроси 3 друзів → Premium безкоштовно.`;
+    keyboard
+      .text('💳 40 грн (картка)', 'pay_card').row()
+      .text('⭐ 75 ★ (Stars)', 'pay_stars').row()
+      .text('👥 Запросити друзів (безкоштовно)', 'pay_referral');
+  } else {
+    text += `🏦 *Донат на священний русоріз* — будь-яка сума (рекомендовано 40 грн)\n\n` +
+      `🇺🇦 Будь у війську або допомагай війську. Кожен внесок наближає нашу перемогу 🫡`; keyboard
+        .text('🏦 Задонатити на банку', 'pay_jar').row()
+  }
 
   await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard });
 };
@@ -110,8 +109,15 @@ export const handlePremiumApproval = async (ctx: Context) => {
 
   await ctx.api.sendMessage(targetUserId, `🎉 *Вітаємо! Оплата успішна!*\n\n💎 Твій статус *Premium* активовано! 🚀`, { parse_mode: 'Markdown' });
 
-  // Оновлюємо адмінське повідомлення з HTML
-  await ctx.editMessageText(`✅ <b>Оплату ПІДТВЕРДЖЕНО</b> для ID: <code>${targetUserId}</code>`, { parse_mode: 'HTML' });
+  const resultText = `✅ <b>Оплату ПІДТВЕРДЖЕНО</b> для ID: <code>${targetUserId}</code>`;
+
+  // Заявка могла прийти як фото (донат/скрін) або як текст (картка) — редагуємо відповідне поле
+  if (ctx.callbackQuery?.message && 'photo' in ctx.callbackQuery.message) {
+    await ctx.editMessageCaption({ caption: resultText, parse_mode: 'HTML' }).catch(() => { });
+  } else {
+    await ctx.editMessageText(resultText, { parse_mode: 'HTML' }).catch(() => { });
+  }
+
   await ctx.answerCallbackQuery('Підтверджено!');
 };
 
@@ -121,8 +127,14 @@ export const handlePremiumRejection = async (ctx: Context) => {
 
   await ctx.api.sendMessage(targetUserId, `❌ *Оплату не знайдено!*\nЗвернися до підтримки з квитанцією.`, { parse_mode: 'Markdown' });
 
-  // Оновлюємо адмінське повідомлення з HTML
-  await ctx.editMessageText(`❌ <b>Оплату ВІДХИЛЕНО</b> для ID: <code>${targetUserId}</code>`, { parse_mode: 'HTML' });
+  const resultText = `❌ <b>Оплату ВІДХИЛЕНО</b> для ID: <code>${targetUserId}</code>`;
+
+  if (ctx.callbackQuery?.message && 'photo' in ctx.callbackQuery.message) {
+    await ctx.editMessageCaption({ caption: resultText, parse_mode: 'HTML' }).catch(() => { });
+  } else {
+    await ctx.editMessageText(resultText, { parse_mode: 'HTML' }).catch(() => { });
+  }
+
   await ctx.answerCallbackQuery('Відхилено!');
 };
 
