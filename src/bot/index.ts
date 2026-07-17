@@ -13,6 +13,8 @@ import { registerErrorHandler } from './routes/errors';
 import { setupSeasonScheduler } from '../services/seasonScheduler';
 import { setupBotCommands } from './setup/commands'; 
 import { chatModeMiddleware } from './middlewares/chatMode';
+import { handleStatusChatCommand, handleStatusChatPageCallback, handleStatusChatUserCallback } from './handlers/adminChat';
+
 
 
 export const bot = new Bot(config.BOT_TOKEN);
@@ -29,4 +31,8 @@ registerPayments(bot);
 registerErrorHandler(bot);
 
 setupSeasonScheduler(bot).catch(console.error);
-setupBotCommands(bot).catch(console.error); // 
+setupBotCommands(bot).catch(console.error); 
+
+bot.command('statuschat', handleStatusChatCommand);
+bot.callbackQuery(/^statuschat_page_\d+$/, handleStatusChatPageCallback);
+bot.callbackQuery(/^statuschat_user_\d+_\d+$/, handleStatusChatUserCallback);

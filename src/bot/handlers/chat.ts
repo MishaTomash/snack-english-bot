@@ -26,6 +26,9 @@ import {
 } from '../../services/chat/rateLimiter';
 import { transcribeVoiceMessage, MAX_VOICE_DURATION_SECONDS } from '../../services/chat/voiceService';
 
+import { logChatMessage } from '../../services/chat/chatLogger';
+
+
 
 const api = new Api(config.BOT_TOKEN);
 
@@ -83,6 +86,8 @@ const sendAiOpeningLine = async (ctx: Context, telegramId: number) => {
   );
   const reply = await getAiChatReply(systemPrompt, []);
   session.conversation.addAssistantMessage(reply);
+  await logChatMessage(telegramId, 'assistant', reply);
+
 
   await ctx.reply(reply);
 };
@@ -185,6 +190,7 @@ export const processChatMessage = async (ctx: Context, telegramId: number, text:
 
 await enqueue(telegramId, async () => {
     session.conversation.addUserMessage(text);
+    await logChatMessage(telegramId, 'user', text);
 
     const userTurnCount = session.conversation.getHistory().filter(t => t.role === 'user').length;
     const shouldCheck = userTurnCount > 0 && userTurnCount % 4 === 0 && !isTooShortToCheck(text);
@@ -196,8 +202,8 @@ await enqueue(telegramId, async () => {
       session.conversation.getHistory(),
       shouldCheck,
       session.level,
-      session.lastStyle,               // ← НОВЕ
-      session.lastEndedWithQuestion    // ← НОВЕ
+      session.lastStyle,               
+      session.lastEndedWithQuestion    
     );
 
     if (result.correction) {
@@ -207,11 +213,12 @@ await enqueue(telegramId, async () => {
       session.conversation.addFact(result.fact);
     }
 
-    // ← НОВЕ: запам'ятовуємо стиль і чи закінчилось питанням, для наступного ходу
     session.lastStyle = result.style;
     session.lastEndedWithQuestion = result.reply.trim().endsWith('?');
 
     session.conversation.addAssistantMessage(result.reply);
+    await logChatMessage(telegramId, 'assistant', result.reply); 
+
 
     await incrementChatMessageCount(telegramId);
     await ChatSession.findOneAndUpdate({ telegramId }, { $inc: { messageCount: 1 } });
