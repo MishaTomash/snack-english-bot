@@ -2,10 +2,11 @@ import mongoose from 'mongoose';
 import { bot } from './bot';
 import { config } from './config';
 import { startCronJobs } from './bot/cron';
-import { startActivityStreakCronJobs } from './cron'; // 👈 ДОДАНО
-import { GrammyError, HttpError } from 'grammy'; // 👈 ДОДАНО ІМПОРТ 
+import { startActivityStreakCronJobs } from './cron'; 
+import { GrammyError, HttpError } from 'grammy'; 
+import { run } from '@grammyjs/runner'; 
 
-// 👇 ДОДАНО ОБРОБНИК ПОМИЛОК
+
 bot.catch((err) => {
   const ctx = err.ctx;
   console.error(`❌ Помилка під час обробки апдейту ${ctx.update.update_id}:`);
@@ -14,7 +15,7 @@ bot.catch((err) => {
   if (e instanceof GrammyError) {
     if (e.error_code === 403) {
       console.warn(`⚠️ Бот не зміг надіслати повідомлення, бо користувач (ID: ${ctx.from?.id}) заблокував його.`);
-      return; // Просто ігноруємо і не "вбиваємо" бота
+      return; 
     }
     console.error("Помилка в запиті до Telegram API:", e.description);
   } else if (e instanceof HttpError) {
@@ -31,10 +32,10 @@ const startApp = async () => {
     console.log('✅ Успішно підключено до MongoDB!');
 
     startCronJobs(bot);
-    startActivityStreakCronJobs(bot); // 👈 ДОДАНО
+    startActivityStreakCronJobs(bot);
 
     console.log('⏳ Запуск бота...');
-    await bot.start();
+    run(bot); 
 
   } catch (error) {
     console.error('❌ Помилка під час запуску додатку:', error);

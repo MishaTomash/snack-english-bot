@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/MishaTomash/snack-english-bot#readme",
   "dependencies": {
+    "@grammyjs/runner": "^2.0.3",
     "dotenv": "^17.4.2",
     "google-tts-api": "^2.0.2",
     "grammy": "^1.43.0",
