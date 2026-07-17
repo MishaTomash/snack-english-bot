@@ -4,6 +4,8 @@ import { getSession, startSession } from '../../services/chat/sessionManager';
 import { getTopicById, getRandomTopic } from '../../services/chat/topics';
 import { User } from '../../models/User';
 import { processChatMessage, handleChatVoice } from '../handlers/chat';
+import { getRandomPersonality } from '../../services/chat/personas';
+
 
 const EXIT_CHAT_TEXT = '❌ Завершити чат';
 const STUB_BUTTONS = ['💡 Підказка', '📝 Перекласти'];
@@ -26,7 +28,7 @@ export const chatModeMiddleware = async (ctx: Context, next: NextFunction) => {
   if (!getSession(telegramId)) {
     const user = await User.findOne({ telegramId });
     const topic = getTopicById(chatSession.topic) || getRandomTopic();
-    startSession(telegramId, topic, user?.level || 'A2');
+    startSession(telegramId, topic, user?.level || 'A2', getRandomPersonality()); // ← оновлено
   }
 
   if (ctx.message?.voice) {

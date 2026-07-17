@@ -153,18 +153,108 @@ Respond ONLY with a valid JSON object, nothing else, in this exact format:
     "❌ Ти написав: \\"<exact student text>\\"\\n✅ Правильно: \\"<corrected version>\\"\\n💡 <one short reason, in Ukrainian, one sentence>"
 `;
 
-export const getAiChatReplyWithCorrection = async (
+// export const getAiChatReplyWithCorrection = async (
+//   systemPrompt: string,
+//   history: ChatTurn[]
+// ): Promise<ChatReplyResult> => {
+//   try {
+//     const response = await openai.chat.completions.create({
+//       model: MODEL,
+//       max_tokens: 300,
+//       temperature: 0.6,
+//       response_format: { type: 'json_object' },
+//       messages: [
+//         { role: 'system', content: systemPrompt + '\n' + CORRECTION_INSTRUCTIONS },
+//         ...history.map(turn => ({ role: turn.role, content: turn.content })),
+//       ],
+//     });
+
+//     const raw = response.choices[0]?.message?.content?.trim() || '{}';
+//     const parsed = JSON.parse(raw);
+
+//     // ← ДОДАНО: якщо модель повернула порожню repl, робимо окремий звичайний запит
+//     // замість заглушки "Sorry, could you say that again?"
+//     if (!parsed.reply || !parsed.reply.trim()) {
+//       const fallbackReply = await getAiChatReply(systemPrompt, history);
+//       return { reply: fallbackReply, correction: parsed.correction || null };
+//     }
+
+//     return {
+//       reply: parsed.reply,
+//       correction: parsed.correction || null,
+//     };
+//   } catch (err) {
+//     console.error('❌ Помилка запиту з перевіркою помилок:', err);
+//     const reply = await getAiChatReply(systemPrompt, history);
+//     return { reply, correction: null };
+//   }
+// };
+
+export interface ChatTurnResult {
+  reply: string;
+  correction: string | null;
+  fact: string | null;
+  style: string; // ← НОВЕ
+}
+
+import { getCorrectionStyle } from './promptBuilder';
+
+const buildTurnInstructions = (
+  requestCorrection: boolean,
+  level: string,
+  lastStyle: string | null,        // ← НОВЕ
+  forbidQuestion: boolean          // ← НОВЕ
+) => {
+  const style = getCorrectionStyle(level);
+
+  const correctionFormat = style === 'simple'
+    ? `write in UKRAINIAN, using \\n for line breaks, in this SIMPLE format with NO grammar terminology:
+    "Невелика поправка 😊\\n❌ <exact student text>\\n✅ <corrected version>\\nДобре!"`
+    : `write in UKRAINIAN, using \\n for line breaks:
+    "❌ Ти написав: \\"<exact student text>\\"\\n✅ Правильно: \\"<corrected version>\\"\\n💡 <one short reason in Ukrainian>"`;
+
+  const styleConstraint = lastStyle
+    ? `Your last reply used style "${lastStyle}". You MUST pick a DIFFERENT style now (A/B/C/D/E/F) — do not repeat "${lastStyle}".`
+    : `Pick any style (A/B/C/D/E/F).`;
+
+  const questionConstraint = forbidQuestion
+    ? `Your last reply ended with a question. This reply must NOT end with a question mark — react, share an opinion, or tell a tiny story instead.`
+    : '';
+
+  return `
+Respond ONLY with a valid JSON object, nothing else, in this exact format:
+{"reply": string, "style": string, "correction": string or null, "fact": string or null}
+
+- "reply": your in-character chat reply, following all the rules above. NEVER leave this empty.
+- "style": which of A/B/C/D/E/F you actually used for "reply" (must match the STYLE VARIATION list in the system prompt).
+- "fact": if the student's LAST message reveals a real personal fact worth remembering, write it as a short lowercase phrase. Otherwise null.
+${requestCorrection
+  ? `- "correction": Check the student's last message for a real, clear, IMPORTANT mistake. Set to null if correct, too short to judge, or unsure. If there's a real mistake, ${correctionFormat}`
+  : `- "correction": always null, do not check for mistakes this turn.`}
+
+STYLE ENFORCEMENT (follow strictly): ${styleConstraint} ${questionConstraint}
+`;
+};
+
+export const getAiChatTurn = async (
   systemPrompt: string,
-  history: ChatTurn[]
-): Promise<ChatReplyResult> => {
+  history: ChatTurn[],
+  requestCorrection: boolean,
+  level: string,
+  lastStyle: string | null,       // ← НОВЕ
+  forbidQuestion: boolean         // ← НОВЕ
+): Promise<ChatTurnResult> => {
   try {
     const response = await openai.chat.completions.create({
       model: MODEL,
       max_tokens: 300,
-      temperature: 0.7,
+      temperature: 0.9, // трохи вище — більше різноманіття формулювань
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt + '\n' + CORRECTION_INSTRUCTIONS },
+        {
+          role: 'system',
+          content: systemPrompt + '\n' + buildTurnInstructions(requestCorrection, level, lastStyle, forbidQuestion),
+        },
         ...history.map(turn => ({ role: turn.role, content: turn.content })),
       ],
     });
@@ -172,21 +262,20 @@ export const getAiChatReplyWithCorrection = async (
     const raw = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed = JSON.parse(raw);
 
-    // ← ДОДАНО: якщо модель повернула порожню repl, робимо окремий звичайний запит
-    // замість заглушки "Sorry, could you say that again?"
     if (!parsed.reply || !parsed.reply.trim()) {
-      const fallbackReply = await getAiChatReply(systemPrompt, history);
-      return { reply: fallbackReply, correction: parsed.correction || null };
+      const fallback = await getAiChatReply(systemPrompt, history);
+      return { reply: fallback, correction: null, fact: null, style: 'B' };
     }
 
     return {
       reply: parsed.reply,
       correction: parsed.correction || null,
+      fact: parsed.fact || null,
+      style: parsed.style || 'B',
     };
   } catch (err) {
-    console.error('❌ Помилка запиту з перевіркою помилок:', err);
+    console.error('❌ Помилка chat turn:', err);
     const reply = await getAiChatReply(systemPrompt, history);
-    return { reply, correction: null };
+    return { reply, correction: null, fact: null, style: 'B' };
   }
 };
-

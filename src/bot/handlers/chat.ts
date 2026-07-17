@@ -13,15 +13,9 @@ import { getRandomTopic, getTopicById } from '../../services/chat/topics';
 import { buildSystemPrompt } from '../../services/chat/promptBuilder';
 import { startSession, getSession, endSession, enqueue, touchSession, registerInactivityHandler } from '../../services/chat/sessionManager';
 import { Api } from 'grammy';
+import { getRandomPersonality } from '../../services/chat/personas';
 import { isNotEnglish } from '../../services/chat/languageCheck';
-import {
-    getAiChatReply,
-    getAiChatReplyWithCorrection,
-    getChatAnalysis,
-    ChatAnalysisResult,
-    getChatHint,
-    translateToUkrainian,
-} from '../../services/chat/chatAiService';
+import { getAiChatReply, getAiChatTurn, getChatAnalysis, ChatAnalysisResult, getChatHint, translateToUkrainian } from '../../services/chat/chatAiService';
 import {
     canSendChatMessage,
     incrementChatMessageCount,
@@ -36,17 +30,17 @@ import { transcribeVoiceMessage, MAX_VOICE_DURATION_SECONDS } from '../../servic
 const api = new Api(config.BOT_TOKEN);
 
 registerInactivityHandler(async (telegramId: number) => {
-  try {
-    await ChatSession.deleteOne({ telegramId });
+    try {
+        await ChatSession.deleteOne({ telegramId });
 
-    await api.sendMessage(
-      telegramId,
-      '⏰ Чат завершено через бездіяльність (15 хв). Натисни «💬 Чатік», щоб почати знову 👇',
-      { reply_markup: createMainMenu() }
-    );
-  } catch (err) {
-    console.error('Помилка авто-завершення чату:', err);
-  }
+        await api.sendMessage(
+            telegramId,
+            '⏰ Чат завершено через бездіяльність (15 хв). Натисни «💬 Чатік», щоб почати знову 👇',
+            { reply_markup: createMainMenu() }
+        );
+    } catch (err) {
+        console.error('Помилка авто-завершення чату:', err);
+    }
 });
 
 export const handleStartChat = async (ctx: Context) => {
@@ -56,6 +50,7 @@ export const handleStartChat = async (ctx: Context) => {
     const user = await User.findOne({ telegramId });
     const level = user?.level || 'A2';
     const topic = getRandomTopic();
+    const persona = getRandomPersonality(); // ← НОВЕ
 
     await ChatSession.findOneAndUpdate(
         { telegramId },
@@ -63,7 +58,7 @@ export const handleStartChat = async (ctx: Context) => {
         { upsert: true }
     );
 
-    startSession(telegramId, topic, level);
+    startSession(telegramId, topic, level, persona);
 
     await ctx.reply(
         `💬 <b>Режим "Чатік" активовано!</b>\n\n` +
@@ -77,61 +72,19 @@ export const handleStartChat = async (ctx: Context) => {
 };
 
 const sendAiOpeningLine = async (ctx: Context, telegramId: number) => {
-    const session = getSession(telegramId);
-    if (!session) return;
+  const session = getSession(telegramId);
+  if (!session) return;
 
-    const systemPrompt = buildSystemPrompt(session.level, session.topic);
+  const systemPrompt = buildSystemPrompt(
+    session.level,
+    session.topic,
+    session.persona,
+    session.conversation.getFacts(),
+  );
+  const reply = await getAiChatReply(systemPrompt, []);
+  session.conversation.addAssistantMessage(reply);
 
-    const openingInstruction = `
-${systemPrompt}
-
-This is the first message.
-
-Rules:
-- Use very easy English.
-- Match the user's level exactly.
-- Keep it short.
-- 2 short sentences only.
-- Be friendly.
-- Do not use difficult words.
-- Do not explain anything.
-- Do not teach.
-
-Say hello.
-
-Say today's topic.
-
-Ask ONE easy question about the topic.
-
-Example for A1:
-
-"Hi! 😊
-
-Today we talk about family.
-
-Do you have a big family?"
-
-Example for A2:
-
-"Hey! 😄
-
-Today let's talk about movies.
-
-What movie do you like?"
-
-Example for B1:
-
-"Hey! 😊
-
-Today let's chat about travel.
-
-Where did you travel last?"
-`;
-
-    const reply = await getAiChatReply(openingInstruction, []);
-    session.conversation.addAssistantMessage(reply);
-
-    await ctx.reply(reply);
+  await ctx.reply(reply);
 };
 
 const formatAnalysis = (analysis: ChatAnalysisResult): string => {
@@ -197,7 +150,7 @@ const isTooShortToCheck = (text: string): boolean => {
 };
 
 export const processChatMessage = async (ctx: Context, telegramId: number, text: string) => {
-    touchSession(telegramId); 
+    touchSession(telegramId);
 
     if (isOnCooldown(telegramId)) return;
     registerMessageTime(telegramId);
@@ -230,34 +183,42 @@ export const processChatMessage = async (ctx: Context, telegramId: number, text:
         return;
     }
 
-    await enqueue(telegramId, async () => {
-        session.conversation.addUserMessage(text);
+await enqueue(telegramId, async () => {
+    session.conversation.addUserMessage(text);
 
-        const userTurnCount = session.conversation.getHistory().filter(t => t.role === 'user').length;
-        const shouldCheck = userTurnCount > 0 && userTurnCount % 3 === 0 && !isTooShortToCheck(text);
+    const userTurnCount = session.conversation.getHistory().filter(t => t.role === 'user').length;
+    const shouldCheck = userTurnCount > 0 && userTurnCount % 4 === 0 && !isTooShortToCheck(text);
 
-        const systemPrompt = buildSystemPrompt(session.level, session.topic);
+    const systemPrompt = buildSystemPrompt(session.level, session.topic, session.persona, session.conversation.getFacts());
 
-        let reply: string;
+    const result = await getAiChatTurn(
+      systemPrompt,
+      session.conversation.getHistory(),
+      shouldCheck,
+      session.level,
+      session.lastStyle,               // ← НОВЕ
+      session.lastEndedWithQuestion    // ← НОВЕ
+    );
 
-        if (shouldCheck) {
-            const result = await getAiChatReplyWithCorrection(systemPrompt, session.conversation.getHistory());
-            reply = result.reply;
+    if (result.correction) {
+      await ctx.reply(`📌 ${result.correction}`);
+    }
+    if (result.fact) {
+      session.conversation.addFact(result.fact);
+    }
 
-            if (result.correction) {
-                await ctx.reply(`📌 ${result.correction}`);
-            }
-        } else {
-            reply = await getAiChatReply(systemPrompt, session.conversation.getHistory());
-        }
+    // ← НОВЕ: запам'ятовуємо стиль і чи закінчилось питанням, для наступного ходу
+    session.lastStyle = result.style;
+    session.lastEndedWithQuestion = result.reply.trim().endsWith('?');
 
-        session.conversation.addAssistantMessage(reply);
+    session.conversation.addAssistantMessage(result.reply);
 
-        await incrementChatMessageCount(telegramId);
-        await ChatSession.findOneAndUpdate({ telegramId }, { $inc: { messageCount: 1 } });
+    await incrementChatMessageCount(telegramId);
+    await ChatSession.findOneAndUpdate({ telegramId }, { $inc: { messageCount: 1 } });
 
-        await ctx.reply(reply);
-    });
+    const cleanAiMessage = (t: string) => t.replace(/\n\s*\n/g, '\n').trim();
+    await ctx.reply(cleanAiMessage(result.reply));
+  });
 };
 export const handleChatVoice = async (ctx: Context) => {
     const telegramId = ctx.from?.id;
@@ -327,7 +288,7 @@ export const handleChatHint = async (ctx: Context) => {
     const statusMsg = await ctx.reply('💡 Думаю над підказкою...');
 
     try {
-        const systemPrompt = buildSystemPrompt(session.level, session.topic);
+        const systemPrompt = buildSystemPrompt(session.level, session.topic, session.persona, session.conversation.getFacts());
         const hint = await getChatHint(systemPrompt, session.conversation.getHistory());
         const hintUa = await translateToUkrainian(hint);
 
