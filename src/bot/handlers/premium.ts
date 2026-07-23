@@ -21,8 +21,8 @@ export const sendPremiumMenu = async (ctx: Context) => {
   const mode = await getPaymentMode();
   const keyboard = new InlineKeyboard();
 
-  // let text = `💎 *SnackEnglish Premium*\n\nБезлім слів, курси + тести, більше хр, і ніхто не скаже «ти сьогодні все вивчив, йди геть».\n\nОбери варіант:\n\n`;
-let text = `💎 *SnackEnglish Premium*\n\nПоки ти вчиш — русоріз буде працювати 🫡🇺🇦\n\nОбери варіант:\n\n`;
+  let text = `💎 *SnackEnglish Premium*\n\nБезлім слів, курси + тести, більше хр, і ніхто не скаже «ти сьогодні все вивчив, йди геть».\n\nОбери варіант:\n\n`;
+// let text = `💎 *SnackEnglish Premium*\n\nПоки ти вчиш — русоріз буде працювати 🫡🇺🇦\n\nОбери варіант:\n\n`;
 
   if (mode === 'card') {
     text += `💳 *Картка (Mono/Приват)* — 40 грн (без комісій)\n⭐ *Telegram Stars* — 75 ★ (комісія Apple/Telegram, тому дорожче)\n\n🎁 *Халява*: запроси 3 друзів → Premium безкоштовно.`;
