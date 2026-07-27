@@ -28,17 +28,17 @@ export const handleTopMenu = async (ctx: Context) => {
         const medals = ['🥇', '🥈', '🥉'];
         const top3 = topUsers.slice(0, 3);
 
-        let message = `🏆 *Рейтинг тижня* — до ${endDateStr}\n\n`;
+        let message = `🏆 <b>Рейтинг тижня</b> — до ${endDateStr}\n\n`;
 
         if (topUsers.length === 0) {
             message += `😴 Поки тут порожньо.\nБудь першим — вчи слова і з'явись у топі!`;
         } else {
             topUsers.forEach((u, index) => {
                 const isMe = u.telegramId === telegramId;
-                const nameStr = isMe ? '👤 *Ти*' : formatName(u);
+                const nameStr = isMe ? '👤 <b>Ти</b>' : formatName(u);
                 const premium = u.isPremium ? ' 💎' : '';
                 const place = medals[index] ?? `${index + 1}.`;
-                message += `${place} ${nameStr}${premium} — *${u.seasonXp} XP*\n`;
+                message += `${place} ${nameStr}${premium} — <b>${u.seasonXp} XP</b>\n`;
             });
 
             message += `\n━━━━━━━━━━━━━━━\n`;
@@ -51,7 +51,7 @@ export const handleTopMenu = async (ctx: Context) => {
 
             } else if (userRank === 1) {
                 message +=
-                    `👑 *Ти на першому місці!*\n` +
+                    `👑 <b>Ти на першому місці!</b>\n` +
                     `${currentUser.seasonXp} XP — поки що ніхто не дістав.\n\n` +
                     `Не зупиняйся — другий місць не спить 👀`;
 
@@ -59,18 +59,18 @@ export const handleTopMenu = async (ctx: Context) => {
                 const xpToFirst = top3[0].seasonXp - (currentUser.seasonXp || 0);
                 message +=
                     `🔥 Ти в ТОП-3! Але перше місце ще не твоє.\n` +
-                    `До лідера: *${xpToFirst} XP*\n\n` +
+                    `До лідера: <b>${xpToFirst} XP</b>\n\n` +
                     `💎 Premium знімає ліміт на слова і тести — наздожени лідера сьогодні!`;
 
             } else {
                 const xpToTop3 = (top3[2]?.seasonXp ?? 0) - (currentUser.seasonXp || 0);
                 message +=
-                    `📍 Твоє місце: *${userRank}* з ${totalParticipants} учасників\n` +
-                    `Твої XP цього тижня: *${currentUser.seasonXp}*\n`;
+                    `📍 Твоє місце: <b>${userRank}</b> з ${totalParticipants} учасників\n` +
+                    `Твої XP цього тижня: <b>${currentUser.seasonXp}</b>\n`;
 
                 if (xpToTop3 > 0) {
                     message +=
-                        `До ТОП-3 не вистачає: *${xpToTop3} XP*\n\n` +
+                        `До ТОП-3 не вистачає: <b>${xpToTop3} XP</b>\n\n` +
                         `💎 З Premium — більше слів, більше тестів, більше XP.\n` +
                         `Реальний шанс потрапити в топ цього тижня 👇`;
                 }
@@ -88,9 +88,10 @@ export const handleTopMenu = async (ctx: Context) => {
             .text('💎 Отримати Premium', 'open_premium_menu');
 
         if (ctx.callbackQuery) {
-            return ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard }).catch(() => {});
+            return ctx.editMessageText(message, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
         }
-        return ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard });
+        
+        return ctx.reply(message, { parse_mode: 'HTML', reply_markup: keyboard });
 
     } catch (error) {
         await ctx.reply('❌ Не вдалося завантажити рейтинг.');
