@@ -3,21 +3,20 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { User } from "../../models/User";
 
-const CHANNEL_ID = "@snackEnglish_ua"; // ⚠️ ЗАМІНИ НА СВІЙ
-const CHANNEL_URL = "https://t.me/snackEnglish_ua"; // ⚠️ ЗАМІНИ НА СВІЙ
+const CHANNEL_ID = "@snackEnglish_ua"; // Твій канал
+const CHANNEL_URL = "https://t.me/snackEnglish_ua"; // Посилання
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const setupIndependencePromo = (bot: Bot): void => {
   // ==========================================
   // 1. КОМАНДА ДЛЯ ТЕСТУ (Відправляє тільки тобі)
-  // Напиши в боті: /test_promo
   // ==========================================
   bot.command("test_promo", async (ctx) => {
     const text =
       `🇺🇦 <b>З Днем Незалежності України!</b> 💛💙\n\n` +
       `Сьогодні свято, тому я підготував для вас подарунок! 🎁\n\n` +
-      `Усі, хто сьогодні підпишеться на мій Telegram-канал, автоматично та безкоштовно отримають <b>Premium-доступ</b> у цьому боті.\n\n` +
+      `Усі, хто сьогодні підпишеться на мій Telegram-канал, автоматично та безкоштовно отримають <b>Premium-доступ на 1 тиждень</b> у цьому боті.\n\n` +
       `Не витрачайте час — пропозиція діє лише сьогодні. Тисніть кнопку нижче, підписуйтесь і забирайте свій подарунок! 👇`;
 
     const keyboard = new InlineKeyboard()
@@ -25,15 +24,12 @@ export const setupIndependencePromo = (bot: Bot): void => {
       .row()
       .text("🎁 Я підписався! Дати Premium", "check_indep_sub");
 
-    await ctx.reply("🛠 <b>ТЕСТОВЕ ПОВІДОМЛЕННЯ (бачиш тільки ти):</b>", {
-      parse_mode: "HTML",
-    });
+    await ctx.reply("🛠 <b>ТЕСТОВЕ ПОВІДОМЛЕННЯ:</b>", { parse_mode: "HTML" });
     await ctx.reply(text, { parse_mode: "HTML", reply_markup: keyboard });
   });
 
   // ==========================================
   // 2. КОМАНДА ДЛЯ РОЗСИЛКИ ВСІМ
-  // Напиши в боті: /send_promo_24
   // ==========================================
   bot.command("send_promo_24", async (ctx) => {
     await ctx.reply(
@@ -48,7 +44,7 @@ export const setupIndependencePromo = (bot: Bot): void => {
     const text =
       `🇺🇦 <b>З Днем Незалежності України!</b> 💛💙\n\n` +
       `Сьогодні свято, тому я підготував для вас подарунок! 🎁\n\n` +
-      `Усі, хто сьогодні підпишеться на мій Telegram-канал, автоматично та безкоштовно отримають <b>Premium-доступ</b> у цьому боті.\n\n` +
+      `Усі, хто сьогодні підпишеться на мій Telegram-канал, автоматично та безкоштовно отримають <b>Premium-доступ на 1 тиждень</b> у цьому боті.\n\n` +
       `Не витрачайте час — пропозиція діє лише сьогодні. Тисніть кнопку нижче, підписуйтесь і забирайте свій подарунок! 👇`;
 
     const keyboard = new InlineKeyboard()
@@ -94,18 +90,27 @@ export const setupIndependencePromo = (bot: Bot): void => {
       );
 
       if (isSubscribed) {
+        // 👇 ДОДАЄМО 7 ДНІВ ВІД ПОТОЧНОЇ ДАТИ
+        const expireDate = new Date();
+        expireDate.setDate(expireDate.getDate() + 7);
+
         await User.updateOne(
           { telegramId: userId },
-          { $set: { isPremium: true } },
+          {
+            $set: {
+              isPremium: true,
+              premiumExpiresAt: expireDate, // Записуємо дату на тиждень вперед
+            },
+          },
         );
 
         await ctx.answerCallbackQuery({
-          text: "✅ Дякую за підписку! Premium успішно активовано!",
+          text: "✅ Дякую за підписку! Premium на 1 тиждень успішно активовано!",
           show_alert: true,
         });
 
         await ctx.editMessageText(
-          "🇺🇦 <b>З Днем Незалежності!</b> 💛💙\n\n✅ Ви успішно підписалися на канал і отримали свій Premium. Насолоджуйтесь навчанням!",
+          "🇺🇦 <b>З Днем Незалежності!</b> 💛💙\n\n✅ Ви успішно підписалися на канал і отримали свій Premium на 1 тиждень. Насолоджуйтесь навчанням!",
           { parse_mode: "HTML" },
         );
       } else {
