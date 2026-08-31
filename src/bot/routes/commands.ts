@@ -86,21 +86,30 @@ export const registerCommands = (bot: Bot) => {
     const ADMIN_ID = 1734033519;
     if (ctx.from?.id !== ADMIN_ID) return;
 
-    const now = new Date();
+    // Гарантований діапазон: з 30 серпня до кінця 1 вересня.
+    // Це 100% захопить усіх користувачів зі скріншоту.
+    const startDate = new Date("2026-08-30T00:00:00.000Z");
+    const endDate = new Date("2026-09-01T23:59:59.999Z");
 
     const usersToExpire = await User.find({
       isPremium: true,
-      premiumExpiresAt: { $lte: now }, // ПЕРЕВІР, ЧИ ПОЛЕ НАЗИВАЄТЬСЯ САМЕ ТАК
+      premiumExpiresAt: { $gte: startDate, $lte: endDate },
     });
 
     await ctx.reply(
       `Знайдено користувачів для зняття преміуму: ${usersToExpire.length}. Починаю розсилку...`,
     );
 
+    if (usersToExpire.length === 0) {
+      return ctx.reply(
+        "❌ Користувачів не знайдено. ПЕРЕКОНАЙСЯ, ЩО ПЕРЕЗАПУСТИВ БОТА ПІСЛЯ ЗБЕРЕЖЕННЯ КОДУ!",
+      );
+    }
+
     let successCount = 0;
     const keyboard = new InlineKeyboard().text(
-      "⭐️ Продовжити преміум на місяць",
-      "open_premium_menu", // ПЕРЕВІР CALLBACK
+      "💎 Отримати Premium",
+      "open_premium_menu",
     );
 
     for (const user of usersToExpire) {
