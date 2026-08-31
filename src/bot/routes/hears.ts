@@ -44,11 +44,7 @@ import {
 } from "../handlers/chat";
 import { handleAdminPaymentModeMenu } from "../handlers/paymentAdmin";
 
-import { setupIndependencePromo } from "../handlers/promoIndependence";
-
 export const registerHears = (bot: Bot) => {
-  setupIndependencePromo(bot);
-
   // Адмін
   bot.hears("🚪 Вийти з адмінки", handleExitAdmin);
   bot.hears("➕ Додати слово", handleAddWordPrompt);

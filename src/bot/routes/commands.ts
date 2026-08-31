@@ -1,5 +1,6 @@
-import { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 import { TestQuestion } from "../../models/TestQuestion";
+import { User } from "../../models/User"; // 👈 ДОДАНО ІМПОРТ
 import { checkWordLimits } from "../middlewares/limits";
 
 import { handleStart } from "../handlers/start";
@@ -9,7 +10,7 @@ import { showProfile } from "../handlers/profile";
 import {
   handleAdminCommand,
   handleReferralBroadcastStart,
-} from "../handlers/admin"; // 👈 додано handleReferralBroadcastStart
+} from "../handlers/admin";
 import { handleCoursesList } from "../handlers/courses";
 import { createNewTopicCommand } from "../handlers/adminTopics";
 import { handleTopMenu } from "../handlers/rating";
@@ -25,7 +26,7 @@ export const registerCommands = (bot: Bot) => {
   bot.command("courses", handleCoursesList);
   bot.command("new_topic", createNewTopicCommand);
   bot.command("top", handleTopMenu);
-  bot.command("broadcast_ref", handleReferralBroadcastStart); // 👈 нова команда для адміна
+  bot.command("broadcast_ref", handleReferralBroadcastStart);
 
   // 🆘 Команда HELP (Красиве форматування списку команд)
   bot.command("help", async (ctx) => {
@@ -59,7 +60,74 @@ export const registerCommands = (bot: Bot) => {
     );
   });
 
-  // 🧹 Команда CLEARGENERAL (Очищення бази від пустих тестів з гарним виводом)
+  bot.command("test_promo", async (ctx) => {
+    const testUser = await User.findOne({ telegramId: ctx.from?.id });
+
+    if (!testUser) {
+      return ctx.reply("Ваш акаунт не знайдено в базі.");
+    }
+
+    testUser.isPremium = false;
+    // testUser.premiumExpiresAt = null;
+    await testUser.save();
+
+    const keyboard = new InlineKeyboard().text(
+      "⭐️ Продовжити преміум на місяць",
+      "open_premium_menu", // ПЕРЕВІР, ЧИ ЦЕ ТВІЙ РЕАЛЬНИЙ CALLBACK
+    );
+
+    await ctx.reply(
+      "Ваш безкоштовний преміум до Дня Незалежності закінчився! 😢\n\nЩоб надалі користуватися всіма можливостями, ви можете продовжити підписку:",
+      { reply_markup: keyboard },
+    );
+  });
+
+  bot.command("revoke_all_promo", async (ctx) => {
+    const ADMIN_ID = 1734033519;
+    if (ctx.from?.id !== ADMIN_ID) return;
+
+    const now = new Date();
+
+    const usersToExpire = await User.find({
+      isPremium: true,
+      premiumExpiresAt: { $lte: now }, // ПЕРЕВІР, ЧИ ПОЛЕ НАЗИВАЄТЬСЯ САМЕ ТАК
+    });
+
+    await ctx.reply(
+      `Знайдено користувачів для зняття преміуму: ${usersToExpire.length}. Починаю розсилку...`,
+    );
+
+    let successCount = 0;
+    const keyboard = new InlineKeyboard().text(
+      "⭐️ Продовжити преміум на місяць",
+      "open_premium_menu", // ПЕРЕВІР CALLBACK
+    );
+
+    for (const user of usersToExpire) {
+      user.isPremium = false;
+      await user.save();
+
+      try {
+        await ctx.api.sendMessage(
+          user.telegramId,
+          "Ваш безкоштовний преміум до Дня Незалежності закінчився! 😢\n\nЩоб надалі користуватися всіма можливостями, ви можете продовжити підписку:",
+          { reply_markup: keyboard },
+        );
+        successCount++;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } catch (error) {
+        console.log(
+          `Не вдалося надіслати повідомлення юзеру ${user.telegramId}`,
+        );
+      }
+    }
+
+    await ctx.reply(
+      `✅ Готово! Преміум знято, повідомлення доставлено ${successCount} користувачам.`,
+    );
+  });
+
+  // 🧹 Команда CLEARGENERAL
   bot.command("cleargeneral", async (ctx) => {
     try {
       const result = await TestQuestion.deleteMany({ wordId: null });
